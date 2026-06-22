@@ -1,0 +1,14 @@
+# Cloudflare Pages configuration (config-as-code).
+#
+# The 404 on *.pages.dev happens when Pages has no static output to serve — this
+# repo is a Python CLI, so the dashboard must be exported to a static directory
+# first. `pages_build_output_dir` tells Pages where the built site lives.
+#
+# A prebuilt site is committed under ./public, so this serves even with an empty
+# build command. To regenerate on every deploy instead, set the build command in
+# the Pages dashboard to (stdlib only, runs from the repo checkout):
+#   python3 -m gold_regime_tracker seed && \
+#   python3 -m gold_regime_tracker export-web --out public --force
+
+name = "au-dyp"
+pages_build_output_dir = "./public"

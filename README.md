@@ -132,6 +132,37 @@ python -m gold_regime_tracker fetch price --file xauusd_d.csv
 `--file` accepts the CFTC annual `.zip` or an uncompressed `.txt`/`.csv`, and any
 OHLC CSV with a `Date,...,Close` header for price.
 
+## Web dashboard (Cloudflare Pages / any static host)
+
+Cloudflare Pages serves a **static site**, not Python — so the dashboard is
+*exported* to plain HTML and Pages serves that. This matches the spec: §6 wants
+a single screen you *visit on a schedule*, not a live app.
+
+```bash
+python -m gold_regime_tracker seed            # or load real data via fetch/add
+python -m gold_regime_tracker export-web --out public
+# -> public/index.html  (self-contained, data embedded inline)
+#    public/assessment.json
+```
+
+A prebuilt `public/` is committed, so the site serves even with no build step.
+
+**Cloudflare Pages setup (fixes the `*.pages.dev` 404):** the 404 means Pages had
+nothing static to serve. Point it at `public/`:
+
+- **Config-as-code:** `wrangler.toml` already sets `pages_build_output_dir =
+  "./public"`. With Wrangler: `npx wrangler pages deploy public`.
+- **Dashboard (Git-connected project):** set **Build output directory** to
+  `public`. Leave the build command empty to serve the committed snapshot, or
+  set it to regenerate on deploy (runs from the repo checkout — no install
+  needed, stdlib only):
+  ```
+  python3 -m gold_regime_tracker seed && \
+  python3 -m gold_regime_tracker export-web --out public --force
+  ```
+
+Open `public/index.html` locally to preview — it works over `file://` too.
+
 ## Configuration (§4, §7.6)
 
 Thresholds live in [`config/thresholds.yaml`](./config/thresholds.yaml), never

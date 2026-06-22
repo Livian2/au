@@ -117,6 +117,16 @@ def cmd_history(args) -> int:
     return 0
 
 
+def cmd_export_web(args) -> int:
+    cfg = load_config(args.config)
+    today = _today(args)
+    from .webexport import build_site
+
+    path = build_site(cfg, args.out, today, force=args.force)
+    print(f"[export-web] wrote {path} (+ assessment.json). Publish dir: {args.out}")
+    return 0
+
+
 def cmd_seed(args) -> int:
     n = seed_baseline()
     print(f"[seed] loaded baseline example data ({n} records). Run `assess` to see the dashboard.")
@@ -183,6 +193,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("seed", help="load June-2026 baseline example data")
     s.set_defaults(func=cmd_seed)
+
+    w = sub.add_parser("export-web", help="render the dashboard to a static site (Cloudflare Pages)")
+    w.add_argument("--out", default="public", help="output directory (default: public)")
+    w.add_argument("--today", help="override 'today' (YYYY-MM-DD)")
+    w.add_argument("--force", action="store_true", help="bypass the §7.3 weekly cap")
+    w.set_defaults(func=cmd_export_web)
 
     return p
 

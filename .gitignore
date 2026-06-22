@@ -8,3 +8,7 @@ venv/
 # Local data store (journal entries + history log) is machine-local by default.
 # Remove this line if you want to version your assessment history.
 /data/*.json
+
+# setuptools build artifacts
+/build/
+/dist/

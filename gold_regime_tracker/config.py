@@ -11,11 +11,25 @@ import os
 from datetime import date, datetime
 from typing import Any
 
-DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "config",
-    "thresholds.yaml",
-)
+_REL = os.path.join("config", "thresholds.yaml")
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _default_config_path() -> str:
+    """Locate thresholds.yaml whether running from the repo checkout (`python -m`)
+    or as an installed console script (search the current working directory)."""
+    candidates = [
+        os.path.join(os.path.dirname(_PKG_DIR), _REL),  # repo layout
+        os.path.join(os.getcwd(), _REL),                # cwd is the checkout
+        os.path.join(_PKG_DIR, _REL),                   # packaged copy, if bundled
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+DEFAULT_CONFIG_PATH = _default_config_path()
 
 
 def _load_yaml(path: str) -> dict:
@@ -106,4 +120,4 @@ class Config:
 
 
 def load_config(path: str | None = None) -> Config:
-    return Config(_load_yaml(path or DEFAULT_CONFIG_PATH))
+    return Config(_load_yaml(path or _default_config_path()))

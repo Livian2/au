@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gold-regime-tracker"
+version = "0.1.0"
+description = "Decision-support tracker for a buy-and-hold physical gold position."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []          # runs on the standard library alone
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+gold-regime = "gold_regime_tracker.cli:main"
+
+[tool.setuptools]
+packages = ["gold_regime_tracker", "gold_regime_tracker.fetchers"]

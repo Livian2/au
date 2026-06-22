@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gold Regime Tracker — 2026-06-22</title>
+<style>
+  :root {
+    --bg:#15171c; --panel:#1d2027; --line:#2c303a; --text:#d7dae0; --muted:#878d99;
+    --healthy:#5fb37a; --transition:#d8a24a; --regime:#cf5b5b; --stale:#6b7180;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .wrap { max-width:920px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:15px; font-weight:600; letter-spacing:.04em; color:var(--muted);
+    text-transform:uppercase; margin:0 0 18px; }
+  .headline { background:var(--panel); border:1px solid var(--line); border-left-width:4px;
+    border-radius:8px; padding:20px 22px; margin-bottom:16px; }
+  .headline.healthy { border-left-color:var(--healthy); }
+  .headline.transition { border-left-color:var(--transition); }
+  .headline.regime { border-left-color:var(--regime); }
+  .regime-label { font-size:24px; font-weight:700; margin:0 0 6px; }
+  .healthy .regime-label { color:var(--healthy); }
+  .transition .regime-label { color:var(--transition); }
+  .regime .regime-label { color:var(--regime); }
+  .sub { color:var(--muted); font-size:13px; }
+  .rec { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+  .conf-bar { height:6px; background:var(--line); border-radius:3px; margin:10px 0 4px; overflow:hidden; }
+  .conf-fill { height:100%; }
+  .healthy .conf-fill { background:var(--healthy); }
+  .transition .conf-fill { background:var(--transition); }
+  .regime .conf-fill { background:var(--regime); }
+  table { width:100%; border-collapse:collapse; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 12px; border-top:1px solid var(--line);
+    vertical-align:top; font-size:13px; }
+  th { color:var(--muted); font-weight:600; text-transform:uppercase;
+    letter-spacing:.04em; font-size:11px; border-top:none; }
+  .id { font-weight:600; white-space:nowrap; }
+  .val { color:var(--text); }
+  .rule, .asof, .meta { color:var(--muted); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:11px; font-size:11px;
+    font-weight:700; letter-spacing:.03em; }
+  .badge.healthy { background:rgba(95,179,122,.15); color:var(--healthy); }
+  .badge.transition { background:rgba(216,162,74,.15); color:var(--transition); }
+  .badge.regime { background:rgba(207,91,91,.15); color:var(--regime); }
+  .badge.stale { background:rgba(107,113,128,.18); color:var(--stale); }
+  .tag { font-size:10px; color:var(--muted); border:1px solid var(--line);
+    border-radius:4px; padding:1px 5px; margin-left:4px; }
+  .note { margin-top:5px; color:var(--text); font-size:12px; opacity:.85; }
+  .meta.warn { color:var(--regime); }
+  .firing { margin:16px 0; color:var(--muted); font-size:13px; }
+  .firing b { color:var(--text); }
+  .notice { background:var(--panel); border:1px solid var(--line);
+    border-left:3px solid var(--muted); border-radius:6px; padding:10px 14px;
+    margin:8px 0; font-size:13px; color:var(--text); }
+  .notice.warn { border-left-color:var(--regime); }
+  footer { margin-top:26px; color:var(--muted); font-size:12px;
+    border-top:1px solid var(--line); padding-top:14px; }
+  section { margin-top:22px; }
+  section > h2 { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--muted); margin:0 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gold Regime Tracker &middot; assessment for 2026-06-22</h1>
+
+  <div class="headline healthy">
+    <div class="regime-label">HEALTHY CONSOLIDATION</div>
+    <div class="sub">Macro gate: NEUTRAL &nbsp;|&nbsp;
+      Confidence 100% (fraction of fresh rows agreeing)</div>
+    <div class="conf-bar"><div class="conf-fill" style="width:100%"></div></div>
+    <div class="rec"><b>Recommendation:</b> No action. Next scheduled review: 2026-06-29.</div>
+  </div>
+
+  
+
+  <section>
+    <h2>Rows</h2>
+    <table>
+      <thead><tr><th>Indicator</th><th>State</th><th>Value</th><th>Rule</th><th>As-of</th></tr></thead>
+      <tbody>
+      <tr class="row healthy">
+        <td class="id">MM_NET </td>
+        <td><span class="badge healthy">HEALTHY</span></td>
+        <td class="val">net=105900 (long=126200, short=20300)</td>
+        <td class="rule">mm_net 105900 &gt;= 70000<div class="note">Net falling (-100); longs +200, shorts +300. SHORTS INITIATING — active down-conviction (the meaningful tell). Weight this toward REGIME.</div></td>
+        <td class="asof">2026-06-16<br><span class="meta">age 6d</span>  </td>
+      </tr>
+      <tr class="row healthy">
+        <td class="id">MM_SHORT </td>
+        <td><span class="badge healthy">HEALTHY</span></td>
+        <td class="val">gross_short=20300 (rising)</td>
+        <td class="rule">gross short 20300 &lt; 35000<div class="note">Best conviction tell: rising gross shorts is the only conviction signal in the COT data.</div></td>
+        <td class="asof">2026-06-16<br><span class="meta">age 6d</span>  </td>
+      </tr>
+      <tr class="row healthy">
+        <td class="id">ETF_HOLD </td>
+        <td><span class="badge healthy">HEALTHY</span></td>
+        <td class="val">4118.0t, ytd_flow=12200000000.0</td>
+        <td class="rule">tonnes 4118.0 &gt;= 4000 and ytd_flow &gt; 0</td>
+        <td class="asof">2026-06<br><span class="meta">age 21d</span>  </td>
+      </tr>
+      <tr class="row healthy">
+        <td class="id">PRICE </td>
+        <td><span class="badge healthy">HEALTHY</span></td>
+        <td class="val">close=4402.0, +1.4% vs 200DMA</td>
+        <td class="rule">weekly close 4402.0 &gt; 4300</td>
+        <td class="asof">2026-06-19<br><span class="meta">age 3d</span>  </td>
+      </tr>
+      <tr class="row healthy">
+        <td class="id">CB_BID <span class="tag">MANUAL</span></td>
+        <td><span class="badge healthy">HEALTHY</span></td>
+        <td class="val">firm (otc_adjusted=310.0)</td>
+        <td class="rule">qualitative read: firm<div class="note">WGC OTC-adjusted estimate; official trade data under-captures sovereign buying.</div></td>
+        <td class="asof">2026-03-31<br><span class="meta">age 83d</span>  </td>
+      </tr></tbody>
+    </table>
+  </section>
+
+  <div class="firing">Firing (TRANSITION/REGIME, counting): <b>none</b></div>
+
+  <footer>
+    This tracker is silent between weekly snapshots and cannot price a gap move on a Hormuz / CPI / Fed headline. It is for trend confirmation, not event protection (§7.5).<br>
+    This is a static snapshot — it does not auto-refresh. Regenerate on your
+    weekly schedule with <code>export-web</code>.
+  </footer>
+
+  <script type="application/json" id="assessment-data">{
+  "assessment": {
+    "date": "2026-06-22",
+    "label": "HEALTHY CONSOLIDATION",
+    "firing_rows": [],
+    "macro_gate": "NEUTRAL",
+    "recommendation": "No action. Next scheduled review: 2026-06-29.",
+    "confidence": 1.0,
+    "notes": [],
+    "warnings": []
+  },
+  "generated": "2026-06-22"
+}</script>
+</div>
+</body>
+</html>
