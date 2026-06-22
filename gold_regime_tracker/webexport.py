@@ -245,16 +245,16 @@ def render_html(
   .price-chart .grid {{ stroke:var(--line); stroke-width:1; }}
   .price-chart .ylab {{ fill:var(--muted); font:11px ui-monospace,monospace; text-anchor:end; }}
   .price-chart .xlab {{ fill:var(--muted); font:11px ui-monospace,monospace; text-anchor:middle; }}
-  .price-chart .band {{ fill:rgba(201,161,74,.08); }}
-  .price-chart .bound {{ stroke:rgba(201,161,74,.45); stroke-width:1.2; stroke-dasharray:5 4; }}
-  .price-chart .trend {{ stroke:rgba(230,232,238,.45); stroke-width:1.2; stroke-dasharray:2 4; }}
+  .price-chart .band {{ fill:rgba(201,161,74,.08); stroke:none; }}
+  .price-chart .bound {{ fill:none; stroke:rgba(201,161,74,.45); stroke-width:1.2; stroke-dasharray:5 4; }}
+  .price-chart .trend {{ fill:none; stroke:rgba(230,232,238,.45); stroke-width:1.2; stroke-dasharray:2 4; }}
   .price-chart .price {{ fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }}
-  .price-chart .ref {{ stroke:rgba(139,146,161,.35); stroke-width:1; stroke-dasharray:1 5; }}
-  .price-chart .lvl {{ stroke-width:1.2; stroke-dasharray:6 4; }}
+  .price-chart .ref {{ fill:none; stroke:rgba(139,146,161,.35); stroke-width:1; stroke-dasharray:1 5; }}
+  .price-chart .lvl {{ fill:none; stroke-width:1.2; stroke-dasharray:6 4; }}
   .price-chart .lvl.res {{ stroke:rgba(217,99,99,.6); }}
   .price-chart .lvl.sup {{ stroke:rgba(95,179,122,.6); }}
   .price-chart .lvl.ath {{ stroke:rgba(217,99,99,.35); stroke-dasharray:2 3; }}
-  .price-chart .lvllab {{ font:10px ui-monospace,monospace; text-anchor:start; }}
+  .price-chart .lvllab {{ font:10px ui-monospace,monospace; text-anchor:end; }}
   .price-chart .lvllab.res {{ fill:var(--regime); }}
   .price-chart .lvllab.sup {{ fill:var(--healthy); }}
   .price-chart .lvllab.ath {{ fill:var(--muted); }}

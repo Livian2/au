@@ -16,7 +16,7 @@ from .analysis import SwingLevels, TrendChannel
 from .models import PriceBar
 
 _W, _H = 880, 360
-_PAD_L, _PAD_R, _PAD_T, _PAD_B = 58, 64, 16, 28
+_PAD_L, _PAD_R, _PAD_T, _PAD_B = 58, 20, 16, 28
 
 
 def _esc(v) -> str:
@@ -92,8 +92,12 @@ def render_price_chart(
         lb = " ".join(f'{"M" if j==0 else "L"} {px(i):.1f} {py(ch.lower_at(i)):.1f}' for j, i in enumerate(idxs))
         svg.append(f'<path class="bound" d="{ub}"/><path class="bound" d="{lb}"/>')
 
-    # Swing support / resistance + ATH (real levels, labelled with their date)
+    # Swing support / resistance + ATH (real levels, labelled with their date).
+    # Labels sit inside the plot, right-aligned; coincident levels are de-duped
+    # (e.g. when the nearest resistance IS the all-time high).
     if swings is not None:
+        drawn: list[float] = []
+        tol = (y_hi - y_lo) * 0.02
         for lvl, cls, tag in (
             (swings.all_time_high, "ath", "ATH"),
             (swings.nearest_resistance, "res", "resistance"),
@@ -102,10 +106,16 @@ def render_price_chart(
             if not lvl or not (y_lo <= lvl[1] <= y_hi):
                 continue
             d, price = lvl
+            if any(abs(price - p) < tol for p in drawn):
+                continue
+            drawn.append(price)
             y = py(price)
-            yr = d[:7]
+            ly = min(max(_PAD_T + 12, y - 6), _H - _PAD_B - 4)
             svg.append(f'<line class="lvl {cls}" x1="{_PAD_L}" y1="{y:.1f}" x2="{_W-_PAD_R}" y2="{y:.1f}"/>')
-            svg.append(f'<text class="lvllab {cls}" x="{_W-_PAD_R+5}" y="{y+3:.1f}">{_esc(tag)} ${int(price):,}<tspan class="lvldate"> · {_esc(yr)}</tspan></text>')
+            svg.append(
+                f'<text class="lvllab {cls}" x="{_W-_PAD_R-6}" y="{ly:.1f}">'
+                f'{_esc(tag)} ${int(price):,}<tspan class="lvldate"> · {_esc(d[:7])}</tspan></text>'
+            )
 
     # X year labels
     seen = set()
