@@ -1,0 +1,5 @@
+# The tracker runs on the Python standard library alone.
+# PyYAML is optional: if present, it parses config/thresholds.yaml; if absent,
+# a built-in minimal parser is used. pytest is for the test suite only.
+PyYAML>=6.0   ; extra == "yaml"
+pytest>=7.0   ; extra == "dev"

@@ -1,0 +1,84 @@
+# Gold Regime Tracker — threshold configuration
+#
+# Thresholds are NOT hardcoded in the program (spec §4, §7.6). They drift.
+# Re-anchor every few quarters and update `last_reanchored` below. If that
+# date is more than 6 months old, the dashboard will nag you to re-baseline
+# (spec §7.6 anti-anchoring).
+#
+# Baseline anchored to ~June 22, 2026 prints.
+
+last_reanchored: 2026-06-22
+
+# Expected refresh cadence per indicator, in days. A row older than its
+# cadence * staleness_multiplier (see §3) is greyed out and excluded from
+# confirmation counts.
+cadence_days:
+  MM_NET: 7
+  MM_SHORT: 7
+  ETF_HOLD: 30
+  PRICE: 7        # we assess on weekly close
+  CB_BID: 91      # quarterly
+  MACRO: 7
+staleness_multiplier: 1.5
+
+# Reference price levels (June 2026 — update as they drift, §2.2).
+reference_levels:
+  price_200dma: 4340
+  support_shelf: 4300
+  next_support: 3800
+  resistance_low: 4470
+  resistance_high: 4530
+
+# --- Indicator classification thresholds (§4) ---
+
+# Managed-money net long, contracts. Baseline ~106k.
+MM_NET:
+  healthy_min: 70000          # healthy:    >= 70000
+  transition_min: 50000       # transition: 50000..70000 with falling open interest
+  # regime: < 50000 toward flat/negative
+
+# Managed-money GROSS short, contracts. Baseline ~20k. The conviction tell.
+MM_SHORT:
+  healthy_max: 35000          # healthy:    < 35000
+  transition_max: 55000       # transition: 35000..55000
+  # regime: >= 55000 and rising (funds actively short, not just unwinding longs)
+
+# Global gold-backed ETF tonnes + flow persistence.
+ETF_HOLD:
+  healthy_tonnes_min: 4000    # healthy: tonnes >= 4000 and ytd_flow > 0
+  transition_tonnes_min: 3900 # transition: 3900..4000, 2-3 consecutive monthly outflows
+  transition_consecutive_outflows: 2
+  # regime: tonnes < 3900 with accelerating outflows and ytd_flow < 0
+
+# Weekly close vs structure.
+PRICE:
+  healthy_close_min: 4300     # healthy: weekly close > 4300 (above ~200DMA)
+  transition_close_max: 4530  # transition: 4300..4530 (choppy, capped)
+  # regime: decisive weekly close < 4300 (opens 3800)
+
+# Official-sector bid — manual quarterly, qualitative.
+#   healthy:    otc_adjusted firm or rising
+#   transition: intensity softening q/q
+#   regime:     visibly cooling — second leg failing
+CB_BID:
+  healthy_states: ["firm", "rising"]
+  transition_states: ["softening"]
+  regime_states: ["cooling"]
+
+# --- Macro gate (§5). MACRO does not vote; it gates the others. ---
+MACRO:
+  hawkish_hike_odds_min: 80    # rising hike odds at/above this => hawkish lean
+  hot_cpi_surprise_bp: 10      # CPI surprise (bp) above consensus => hot
+  # Brent rising + Hormuz tense => inflationary/hawkish
+
+# --- State machine knobs (§5, §7) ---
+state_machine:
+  persistence_periods: 2       # §7.2 no single-print actions
+  transition_min_rows: 3       # §5 STEP 4
+  regime_min_rows: 3           # §5 STEP 4
+
+# --- Guardrails (§7) ---
+guardrails:
+  min_decision_interval_days: 90   # §7.1 quarterly at most
+  weekly_refresh: true             # §7.3 cap dashboard recompute to weekly
+  reanchor_nag_days: 183           # §7.6 ~6 months

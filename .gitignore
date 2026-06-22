@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Local data store (journal entries + history log) is machine-local by default.
+# Remove this line if you want to version your assessment history.
+/data/*.json
