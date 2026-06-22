@@ -77,10 +77,11 @@ state_machine:
   transition_min_rows: 3       # §5 STEP 4
   regime_min_rows: 3           # §5 STEP 4
 
-# --- Price-structure analysis (chart bounds) ---
+# --- Price-structure analysis (chart) ---
 analysis:
-  channel_sigma: 2.0       # upper/lower bound = regression trend ± this many residual σ
+  channel_sigma: 2.0       # secular log-trend band = trend × e^(± this many residual σ)
   periods_per_year: 52     # weekly closes
+  swing_window: 6          # bars each side for pivot high/low detection (real S/R)
 
 # --- Guardrails (§7) ---
 guardrails:

@@ -1,89 +1,118 @@
-"""Baseline example data (spec §2 reference prints, ~June 22, 2026).
+"""Baseline example data — illustrative, NOT live.
 
-Loading this lets you run `assess` immediately and see a realistic HEALTHY
-CONSOLIDATION board before wiring up the live fetchers. Numbers mirror the
-reference levels quoted in the spec; they are illustrative, not live.
+The price path is a *stylised reconstruction* of the real gold trajectory over
+the window (flat 2023–24 near \\$1,950, convex acceleration through 2025 to the
+Dec-2025 high ~\\$4,530, the late-Jan-2026 blow-off to an all-time ~\\$5,414 and
+the single-day crash, then the H1-2026 pullback to ~\\$4,144). It is marked
+``source="synthetic"`` so the dashboard stamps it as illustrative. Replace it
+with real history via ``fetch price --file`` and the chart/analysis recompute.
+
+The voting rows are set to a coherent *pullback* board: price has broken its
+shelf and the macro gate is hawkish, but the central-bank floor still holds — so
+the tool reads TRANSITION / WATCH (a pullback while the floor holds is, by the
+spec's own rule, not yet a confirmed regime change).
 """
 
 from __future__ import annotations
 
-import math
 import random
 from datetime import date, timedelta
 
 from . import store
 from .models import CbRecord, CotRecord, EtfRecord, MacroRecord, PriceBar
 
+# (date, weekly close) waypoints of the stylised real path; weeks between are
+# interpolated. The spike/crash weeks are pinned so they are NOT smoothed away.
+_WAYPOINTS = [
+    ("2023-06-23", 1925),
+    ("2023-12-29", 2060),
+    ("2024-06-28", 2180),   # ~flat through 2024
+    ("2024-12-27", 2330),
+    ("2025-06-27", 3060),   # convex acceleration begins
+    ("2025-09-26", 3760),
+    ("2025-12-26", 4530),   # Dec-2025 high (~4,533)
+    ("2026-01-23", 5060),   # run-up
+    ("2026-01-30", 5414),   # all-time-high blow-off
+    ("2026-02-06", 4920),   # ~-500 single-week crash
+    ("2026-03-27", 4760),
+    ("2026-04-24", 4610),
+    ("2026-05-22", 4515),
+    ("2026-06-05", 4360),   # rolling over
+    ("2026-06-12", 4250),   # third consecutive weekly decline begins to bite
+    ("2026-06-19", 4144),   # current print (~-8% MoM)
+]
 
-def _synthetic_price_history(weeks: int = 157, end: date = date(2026, 6, 19)) -> list[PriceBar]:
-    """Deterministic ~3-year weekly close series climbing ~2400 -> ~4400 with
-    cyclical swings and noise. Illustrative only — replace with real data via
-    `fetch price`. The last close is pinned to 4402 to match the spec baseline.
-    """
+
+def _interpolate_weekly() -> list[tuple[str, float]]:
     rng = random.Random(20260622)
-    start_price, end_price = 2400.0, 4350.0
-    closes: list[float] = []
-    for w in range(weeks):
-        f = w / (weeks - 1)
-        trend = start_price + (end_price - start_price) * f
-        cycle = 140.0 * math.sin(f * math.pi * 3.2)          # multi-month swings
-        drift = rng.gauss(0, 28.0)                            # week-to-week noise
-        closes.append(round(trend + cycle + drift, 1))
-    closes[-1] = 4402.0  # pin the latest weekly close to the baseline print
+    wp = [(date.fromisoformat(d), float(p)) for d, p in _WAYPOINTS]
+    out: list[tuple[str, float]] = []
+    for (d0, p0), (d1, p1) in zip(wp, wp[1:]):
+        weeks = max(1, round((d1 - d0).days / 7))
+        for w in range(weeks):
+            f = w / weeks
+            price = p0 + (p1 - p0) * f
+            # Light noise, suppressed near the pinned spike/crash so they stay sharp.
+            noise = rng.gauss(0, 22) if abs(price - 5414) > 200 else 0
+            out.append(((d0 + timedelta(weeks=w)).isoformat(), round(price + noise, 1)))
+    out.append((wp[-1][0].isoformat(), wp[-1][1]))  # pin the final print exactly
+    return out
 
-    bars: list[PriceBar] = []
-    window = 40  # ~200 trading days for the moving-average proxy
-    for i, close in enumerate(closes):
-        d = end - timedelta(weeks=(weeks - 1 - i))
+
+def _synthetic_price_history() -> list[PriceBar]:
+    rows = _interpolate_weekly()
+    closes = [p for _, p in rows]
+    bars, window = [], 40  # ~200 trading days
+    for i, (d, close) in enumerate(rows):
         ma = round(sum(closes[max(0, i - window + 1): i + 1]) / min(i + 1, window), 1)
-        dist = round((close - ma) / ma * 100, 2)
-        bars.append(PriceBar(date=d.isoformat(), close=close, sma200=ma, dist_200dma_pct=dist))
+        bars.append(
+            PriceBar(
+                date=d,
+                close=close,
+                sma200=ma,
+                dist_200dma_pct=round((close - ma) / ma * 100, 2),
+                source="synthetic",
+            )
+        )
     return bars
 
 
-def _cot(report_date: str, long_: int, short_: int, oi: int) -> CotRecord:
-    return CotRecord(
-        report_date=report_date,
-        fetch_date=report_date,
-        mm_long=long_,
-        mm_short=short_,
-        mm_net=long_ - short_,
-        mm_spread=15000,
-        open_interest=oi,
-    )
+def _cot(d, long_, short_, oi):
+    return CotRecord(d, d, long_, short_, long_ - short_, 15000, oi)
 
 
 def seed_baseline() -> int:
     count = 0
 
-    # CFTC COT — managed money near baseline (net ~106k, gross short ~20k => HEALTHY).
-    for d, lng, sht, oi in [
-        ("2026-05-26", 127000, 21000, 505000),
-        ("2026-06-02", 126500, 20500, 503000),
-        ("2026-06-09", 126000, 20000, 502000),
-        ("2026-06-16", 126200, 20300, 501000),
-    ]:
-        store.save_cot(_cot(d, lng, sht, oi))
-        count += 1
-
-    # Price — ~3 years of weekly closes, deterministic, ending ~4402 above the
-    # 4300 support shelf (HEALTHY). Gives the dashboard chart its history.
     for bar in _synthetic_price_history():
         store.save_price(bar)
         count += 1
 
-    # ETF — holdings above 4000t with positive YTD flow (HEALTHY); May first outflow.
+    # COT — managed money softening: net bleeding into the 50–70k transition band
+    # on falling open interest; gross short creeping into 35–55k (TRANSITION).
+    for d, lng, sht, oi in [
+        ("2026-05-26", 95000, 34000, 470000),
+        ("2026-06-02", 94000, 36000, 462000),
+        ("2026-06-09", 93000, 37000, 455000),
+        ("2026-06-16", 92000, 38000, 448000),
+    ]:
+        store.save_cot(_cot(d, lng, sht, oi))
+        count += 1
+
+    # ETF — holdings slipping into the 3,900–4,000 band on consecutive monthly
+    # outflows (TRANSITION); Western flows leaving.
     for m, tonnes, net, ytd in [
-        ("2026-03", 4150.0, 1.2e9, 14.0e9),
-        ("2026-04", 4135.0, 0.5e9, 14.5e9),
-        ("2026-05", 4121.0, -2.0e9, 12.5e9),
-        ("2026-06", 4118.0, -0.3e9, 12.2e9),
+        ("2026-03", 4080.0, -1.0e9, 8.0e9),
+        ("2026-04", 4020.0, -1.5e9, 5.0e9),
+        ("2026-05", 3980.0, -2.0e9, 2.0e9),
+        ("2026-06", 3960.0, -1.2e9, -0.5e9),
     ]:
         store.save_etf(EtfRecord(month=m, tonnes=tonnes, net_flow_usd=net, ytd_flow_usd=ytd))
         count += 1
 
-    # Central-bank bid — firm (HEALTHY); the price-inelastic structural floor.
-    for q, qual, otc in [("2025-Q4", "firm", 330.0), ("2026-Q1", "firm", 310.0)]:
+    # Central-bank bid — still firm. The price-inelastic structural floor holds,
+    # which is what keeps this a pullback rather than a confirmed regime change.
+    for q, qual, otc in [("2025-Q4", "firm", 340.0), ("2026-Q1", "firm", 315.0)]:
         store.save_cb(
             CbRecord(
                 quarter=q,
@@ -96,17 +125,18 @@ def seed_baseline() -> int:
         )
         count += 1
 
-    # Macro — ~87% Dec hike implied, flat/steady => NEUTRAL gate.
-    for d, odds in [("2026-06-08", 87.0), ("2026-06-15", 87.0)]:
+    # Macro — hawkish gate: dollar at a 1-yr high, a more hawkish Fed (≈9 of 19
+    # expecting at least one more hike), hike odds rising, oil/Hormuz firm.
+    for d, odds in [("2026-06-08", 88.0), ("2026-06-15", 91.0)]:
         store.save_macro(
             MacroRecord(
                 date=d,
                 hike_odds_pct=odds,
-                last_cpi_surprise_bp=2.0,
-                brent_close=72.0,
-                brent_direction="flat",
-                hormuz_state="calm",
-                note="Baseline: hike odds steady, oil rangebound, Hormuz calm.",
+                last_cpi_surprise_bp=15.0,
+                brent_close=78.0,
+                brent_direction="rising",
+                hormuz_state="tense",
+                note="Stronger USD (1-yr high), hawkish Fed dots, hike odds rising.",
             )
         )
         count += 1

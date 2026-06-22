@@ -25,6 +25,18 @@ from .models import (
 )
 
 
+def _fmt_usd(v) -> str:
+    """Compact signed USD: 12.2e9 -> '+$12.2bn', -2e9 -> '-$2.0bn'."""
+    if v is None:
+        return "—"
+    sign = "+" if v > 0 else "-" if v < 0 else ""
+    a = abs(float(v))
+    for div, suf in ((1e9, "bn"), (1e6, "m"), (1e3, "k")):
+        if a >= div:
+            return f"{sign}${a / div:.1f}{suf}"
+    return f"{sign}${a:.0f}"
+
+
 def _days_between(as_of: str, today: date) -> int:
     d = datetime.strptime(as_of, "%Y-%m-%d").date()
     return (today - d).days
@@ -59,6 +71,7 @@ def classify_mm_net(
 
     days, stale = _staleness(cfg, "MM_NET", current.report_date, today)
     note = _decomposition_note(current, prior)
+    d_net = (current.mm_net - prior.mm_net) if prior else None
     return IndicatorState(
         id="MM_NET",
         state=state,
@@ -68,6 +81,11 @@ def classify_mm_net(
         staleness_days=days,
         stale=stale,
         note=note,
+        primary_value=f"{net:,}",
+        primary_label="net long · contracts",
+        chips=[["long", f"{current.mm_long:,}"], ["short", f"{current.mm_short:,}"]],
+        delta=(f"{d_net:+,} w/w" if d_net is not None else ""),
+        delta_dir=("up" if (d_net or 0) > 0 else "down" if (d_net or 0) < 0 else ""),
     )
 
 
@@ -111,6 +129,15 @@ def classify_mm_short(
             state, hit = State.TRANSITION, f"gross short {short} elevated but not rising"
 
     days, stale = _staleness(cfg, "MM_SHORT", current.report_date, today)
+    d_short = (current.mm_short - prior.mm_short) if prior else None
+    if d_short is None:
+        trend = ""
+    elif d_short > 0:
+        trend = "rising"
+    elif d_short < 0:
+        trend = "falling"
+    else:
+        trend = "flat"
     return IndicatorState(
         id="MM_SHORT",
         state=state,
@@ -120,6 +147,10 @@ def classify_mm_short(
         staleness_days=days,
         stale=stale,
         note="Best conviction tell: rising gross shorts is the only conviction signal in the COT data.",
+        primary_value=f"{short:,}",
+        primary_label="gross short · contracts",
+        delta=(f"{trend} {d_short:+,} w/w" if d_short is not None else ""),
+        delta_dir=("up" if (d_short or 0) > 0 else "down" if (d_short or 0) < 0 else ""),
     )
 
 
@@ -151,6 +182,9 @@ def classify_etf(
 
     month_as_date = current.month + "-01"
     days, stale = _staleness(cfg, "ETF_HOLD", month_as_date, today)
+    chips = [["YTD flow", _fmt_usd(current.ytd_flow_usd)]]
+    if current.net_flow_usd is not None:
+        chips.append(["last mo", _fmt_usd(current.net_flow_usd)])
     return IndicatorState(
         id="ETF_HOLD",
         state=state,
@@ -159,6 +193,9 @@ def classify_etf(
         as_of=current.month,
         staleness_days=days,
         stale=stale,
+        primary_value=f"{tonnes:,.0f} t",
+        primary_label="global holdings",
+        chips=chips,
     )
 
 
@@ -197,6 +234,9 @@ def classify_price(cfg: Config, bar: PriceBar, today: date) -> IndicatorState:
 
     days, stale = _staleness(cfg, "PRICE", bar.date, today)
     dist = f", {bar.dist_200dma_pct:+.1f}% vs 200DMA" if bar.dist_200dma_pct is not None else ""
+    chips = []
+    if bar.sma200 is not None:
+        chips.append(["200DMA", f"${bar.sma200:,.0f}"])
     return IndicatorState(
         id="PRICE",
         state=state,
@@ -205,6 +245,11 @@ def classify_price(cfg: Config, bar: PriceBar, today: date) -> IndicatorState:
         as_of=bar.date,
         staleness_days=days,
         stale=stale,
+        primary_value=f"${close:,.0f}",
+        primary_label="weekly close",
+        chips=chips,
+        delta=(f"{bar.dist_200dma_pct:+.1f}% vs 200DMA" if bar.dist_200dma_pct is not None else ""),
+        delta_dir=("up" if (bar.dist_200dma_pct or 0) > 0 else "down" if (bar.dist_200dma_pct or 0) < 0 else ""),
     )
 
 
@@ -225,6 +270,10 @@ def classify_cb(cfg: Config, rec: CbRecord, today: date) -> IndicatorState:
 
     as_of = _quarter_to_date(rec.quarter)
     days, stale = _staleness(cfg, "CB_BID", as_of, today)
+    chips = []
+    if rec.otc_adjusted_t is not None:
+        chips.append(["OTC-adj net buy", f"{rec.otc_adjusted_t:,.0f} t"])
+    chips.append(["quarter", rec.quarter])
     return IndicatorState(
         id="CB_BID",
         state=state,
@@ -234,6 +283,9 @@ def classify_cb(cfg: Config, rec: CbRecord, today: date) -> IndicatorState:
         staleness_days=days,
         stale=stale,
         note=rec.note,
+        primary_value=(q.capitalize() if q else "Unknown"),
+        primary_label="official-sector bid",
+        chips=chips,
     )
 
 

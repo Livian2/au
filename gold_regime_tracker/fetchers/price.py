@@ -37,7 +37,7 @@ def _sma(closes: list[float], window: int) -> Optional[float]:
     return round(sum(closes[-window:]) / window, 2)
 
 
-def build_bars(rows: list[tuple[str, float]]) -> list[PriceBar]:
+def build_bars(rows: list[tuple[str, float]], source: str = "stooq") -> list[PriceBar]:
     """rows: list of (date, close) ascending. Computes SMAs cumulatively."""
     rows = sorted(rows, key=lambda r: r[0])
     closes: list[float] = []
@@ -55,12 +55,13 @@ def build_bars(rows: list[tuple[str, float]]) -> list[PriceBar]:
                 sma100=_sma(closes, 100),
                 sma200=sma200,
                 dist_200dma_pct=dist,
+                source=source,
             )
         )
     return bars
 
 
-def parse_stooq(text: str) -> list[PriceBar]:
+def parse_stooq(text: str, source: str = "stooq") -> list[PriceBar]:
     reader = csv.DictReader(io.StringIO(text))
     rows: list[tuple[str, float]] = []
     for r in reader:
@@ -74,18 +75,18 @@ def parse_stooq(text: str) -> list[PriceBar]:
             continue
     if not rows:
         raise FetchError("No usable rows in price CSV (rate-limited or empty?).")
-    return build_bars(rows)
+    return build_bars(rows, source=source)
 
 
 def fetch(symbol: str = DEFAULT_SYMBOL) -> list[PriceBar]:
-    return parse_stooq(_download(symbol))
+    return parse_stooq(_download(symbol), source="stooq")
 
 
 def from_file(path: str) -> list[PriceBar]:
     """Import from a locally-downloaded OHLC CSV (Date,...,Close header).
     Sidesteps Cloudflare/network blocks — download once in a browser."""
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        return parse_stooq(fh.read())
+        return parse_stooq(fh.read(), source="file")
 
 
 def latest_weekly_close(symbol: str = DEFAULT_SYMBOL) -> Optional[PriceBar]:

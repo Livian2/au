@@ -1,10 +1,17 @@
 {
   "date": "2026-06-22",
-  "label": "HEALTHY CONSOLIDATION",
-  "firing_rows": [],
-  "macro_gate": "NEUTRAL",
-  "recommendation": "No action. Next scheduled review: 2026-06-29.",
-  "confidence": 1.0,
-  "notes": [],
+  "label": "TRANSITION / WATCH",
+  "firing_rows": [
+    "MM_NET",
+    "MM_SHORT",
+    "ETF_HOLD",
+    "PRICE"
+  ],
+  "macro_gate": "HAWKISH",
+  "recommendation": "Review only. Do not transact. Re-check after next CB_BID print.",
+  "confidence": 0.8,
+  "notes": [
+    "MACRO hawkish: REGIME votes weighted UP (scenario that can break two legs at once)."
+  ],
   "warnings": []
 }

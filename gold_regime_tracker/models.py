@@ -49,6 +49,7 @@ class PriceBar:
     sma100: Optional[float] = None
     sma200: Optional[float] = None
     dist_200dma_pct: Optional[float] = None
+    source: str = ""          # "stooq" | "file" | "synthetic" — drives the UI honesty banner
 
 
 @dataclass
@@ -101,7 +102,7 @@ class MacroRecord:
 class IndicatorState:
     id: str
     state: State
-    value: str                # human-readable current value
+    value: str                # human-readable current value (CLI/plain text)
     threshold_hit: str        # which rule fired
     as_of: str                # date of the underlying observation
     staleness_days: int
@@ -109,6 +110,13 @@ class IndicatorState:
     note: str = ""            # e.g. the MM_NET/MM_SHORT decomposition (§4)
     persisted_periods: int = 1  # consecutive periods held in `state`
     counts: bool = True       # passes persistence + freshness filters (§5)
+    # Structured display fields (used by the web view for nicer formatting;
+    # the plain-text/CLI renderer keeps using `value`).
+    primary_value: str = ""   # the headline figure, pre-formatted
+    primary_label: str = ""   # what the headline figure is
+    chips: list = field(default_factory=list)  # [[label, value], ...] secondary
+    delta: str = ""           # e.g. "+5.5% vs 200DMA" or "rising"
+    delta_dir: str = ""       # "up" | "down" | "" (subtle arrow only)
 
 
 @dataclass
