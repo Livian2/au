@@ -1,6 +1,17 @@
-"""Persistence: raw records, manual journal entries, and the assessment history
-log (spec §6, §7). Plain JSON files under ``data/`` — no database needed for a
-tool you visit weekly.
+"""Persistence (spec §6, §7). Plain JSON files — no database needed for a tool
+you visit weekly.
+
+Two stores, deliberately separated so an ephemeral CI runner does the right
+thing:
+
+* ``data/`` — **auto cache** (COT, price). Re-fetched every run; gitignored.
+* ``journal/`` — **tracked** manual entries (CB_BID, ETF, MACRO) and the
+  assessment ``history`` log. These are deliberate human decisions plus the
+  audit trail that the 90-day minimum-decision-interval guardrail (§7.1) reads,
+  so they belong in version control and must survive across runs.
+
+Both roots are overridable via ``GRT_DATA_DIR`` / ``GRT_JOURNAL_DIR`` (used to
+isolate the synthetic demo from the real tracked journal).
 """
 
 from __future__ import annotations
@@ -19,23 +30,33 @@ from .models import (
     RegimeAssessment,
 )
 
-DATA_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"
-)
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
+def _data_dir() -> str:
+    return os.environ.get("GRT_DATA_DIR", os.path.join(_REPO, "data"))
+
+
+def _journal_dir() -> str:
+    return os.environ.get("GRT_JOURNAL_DIR", os.path.join(_REPO, "journal"))
+
+
+# name -> (filename, is_journal)
 FILES = {
-    "cot": "cot.json",
-    "price": "price.json",
-    "etf": "etf.json",
-    "cb": "cb.json",
-    "macro": "macro.json",
-    "history": "history.json",
+    "cot": ("cot.json", False),
+    "price": ("price.json", False),
+    "etf": ("etf.json", True),
+    "cb": ("cb.json", True),
+    "macro": ("macro.json", True),
+    "history": ("history.json", True),
 }
 
 
 def _path(name: str) -> str:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    return os.path.join(DATA_DIR, FILES[name])
+    fname, journal = FILES[name]
+    root = _journal_dir() if journal else _data_dir()
+    os.makedirs(root, exist_ok=True)
+    return os.path.join(root, fname)
 
 
 def _read(name: str) -> list:

@@ -163,6 +163,44 @@ nothing static to serve. Point it at `public/`:
 
 Open `public/index.html` locally to preview — it works over `file://` too.
 
+## Automated weekly refresh (GitHub Actions)
+
+A reload of the deployed page does **not** recompute anything — it's a static
+snapshot. To keep it current, [`.github/workflows/weekly.yml`](./.github/workflows/weekly.yml)
+runs every Saturday (after Friday's COT release): it fetches the auto rows,
+re-runs the assessment, regenerates `public/`, and commits — Cloudflare Pages
+then auto-deploys the push.
+
+What it refreshes vs. not:
+
+- **Auto, every week:** `MM_NET`, `MM_SHORT` (CFTC COT), `PRICE` (Stooq), and the
+  chart + regression/swing analysis.
+- **Manual / you maintain:** `CB_BID` (quarterly), `ETF_HOLD`, `MACRO`. Enter
+  them with `add …` and commit `journal/`. `CB_BID` is hand-entered by design
+  (§2.4) — it's the highest-weight row, and the tool refuses to let auto-data
+  freshness stand in for it.
+
+GitHub's runners have open internet, so the CFTC/Stooq fetches that 403 inside a
+restricted sandbox work there. Notes:
+
+- Scheduled runs execute the workflow on your **default branch**. If Cloudflare
+  deploys from a different branch, either make that the default or trigger the
+  job manually (Actions → *Weekly refresh* → *Run workflow*) on that branch.
+- The workflow pushes with the built-in `GITHUB_TOKEN` (needs *Read and write*
+  workflow permissions: Settings → Actions → General).
+- If the price fetch fails, the run **skips** the commit rather than publish an
+  empty chart.
+
+### Storage model (why there are two folders)
+
+- `data/` — **auto cache** (COT, price). Re-fetched every run; gitignored.
+- `journal/` — **tracked** manual entries (`cb`/`etf`/`macro`) and the assessment
+  `history` log. Version-controlled, because these are deliberate human
+  decisions plus the audit trail the 90-day decision-interval guardrail (§7.1)
+  reads — they must survive across ephemeral CI runs.
+
+Both roots can be overridden via `GRT_DATA_DIR` / `GRT_JOURNAL_DIR`.
+
 ## Configuration (§4, §7.6)
 
 Thresholds live in [`config/thresholds.yaml`](./config/thresholds.yaml), never

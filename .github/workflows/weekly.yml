@@ -1,0 +1,72 @@
+name: Weekly refresh
+
+# Auto-populates the fast rows once a week and redeploys the static dashboard.
+#
+# What this DOES refresh (auto): MM_NET, MM_SHORT (CFTC COT) and PRICE (Stooq),
+# plus the chart and regression/swing analysis.
+# What it does NOT: the manual journal rows — CB_BID (quarterly), and ETF/MACRO
+# until you wire their fetchers. Those you enter by hand and commit to journal/;
+# the spec keeps CB_BID manual on purpose (§2.4) so auto-data freshness can't
+# masquerade as conviction.
+#
+# Runner note: GitHub's runners have open internet, so the CFTC/Stooq fetches
+# that 403 inside a restricted sandbox work fine here.
+
+on:
+  schedule:
+    # Saturday 12:00 UTC — after Friday's 15:30 ET COT release (which reflects
+    # the prior Tuesday). Scheduled runs use the default branch's workflow.
+    - cron: "0 12 * * 6"
+  workflow_dispatch: {}        # manual "Run workflow" button
+
+permissions:
+  contents: write              # to commit the regenerated public/ + history
+
+concurrency:
+  group: weekly-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch COT (CFTC, COMEX gold)
+        id: cot
+        continue-on-error: true
+        run: python -m gold_regime_tracker fetch cot
+
+      - name: Fetch price (Stooq XAU/USD)
+        id: price
+        continue-on-error: true
+        run: python -m gold_regime_tracker fetch price
+
+      - name: Bail out if the price fetch failed
+        if: steps.price.outcome != 'success'
+        run: |
+          echo "::warning::Price fetch failed; skipping regenerate/deploy to avoid publishing an empty chart."
+          exit 1
+
+      - name: Assess (appends the weekly audit entry) and export the site
+        run: |
+          python -m gold_regime_tracker assess --force
+          python -m gold_regime_tracker export-web --out public --force
+
+      - name: Commit & push if anything changed
+        run: |
+          git config user.name "gold-regime-bot"
+          git config user.email "actions@github.com"
+          git add public journal
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git commit -m "Weekly refresh: $(date -u +%Y-%m-%d)"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
