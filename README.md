@@ -71,6 +71,11 @@ python -m gold_regime_tracker assess
 python -m gold_regime_tracker fetch cot            # CFTC COT, COMEX gold 088691
 python -m gold_regime_tracker fetch price          # daily OHLC + SMAs (Stooq xauusd)
 
+# If the live fetch is blocked (Cloudflare / restricted network), download the
+# file once in a browser and import it offline:
+python -m gold_regime_tracker fetch cot   --file ~/Downloads/fut_disagg_txt_2026.zip
+python -m gold_regime_tracker fetch price --file ~/Downloads/xauusd_d.csv
+
 # Manual / semi-auto journal entries:
 python -m gold_regime_tracker add cb    --quarter 2026-Q1 --qualitative firm --otc 310
 python -m gold_regime_tracker add etf   --month 2026-06 --tonnes 4118 --ytd-flow 12.2e9 --net-flow -3e8
@@ -99,6 +104,33 @@ Recommendations:
 - `TRANSITION` → "Review only. Do not transact. Re-check after next CB_BID print."
 - `REGIME` → "Eligible for a deliberate review of core sizing — subject to the
   §7 minimum interval." (Suppressed entirely if inside the 90-day cooldown.)
+
+## Troubleshooting fetches (Cloudflare / restricted networks)
+
+If `fetch cot` / `fetch price` returns **HTTP 403**, the request is being
+rejected before it reaches the data — there are two common causes:
+
+- **Real Cloudflare bot filter** (when running locally). The fetchers already
+  send browser-like headers; if a host still blocks the default identity, set
+  your own: `export GRT_USER_AGENT="Mozilla/5.0 ..."`.
+- **A locked-down execution environment** (e.g. Claude Code on the web, CI, a
+  corporate proxy). Here *all* outbound requests 403 regardless of headers —
+  it is the environment's network policy, not the data host. Run the tool
+  somewhere with outbound access, or use the offline import below.
+
+**Offline import — works through any wall.** Download the source once in a
+browser (which passes Cloudflare normally) and import the local file:
+
+```bash
+# CFTC annual file: https://www.cftc.gov/files/dea/history/fut_disagg_txt_2026.zip
+python -m gold_regime_tracker fetch cot   --file fut_disagg_txt_2026.zip
+
+# Stooq daily CSV: https://stooq.com/q/d/l/?s=xauusd&i=d
+python -m gold_regime_tracker fetch price --file xauusd_d.csv
+```
+
+`--file` accepts the CFTC annual `.zip` or an uncompressed `.txt`/`.csv`, and any
+OHLC CSV with a `Date,...,Close` header for price.
 
 ## Configuration (§4, §7.6)
 

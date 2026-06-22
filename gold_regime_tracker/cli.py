@@ -40,19 +40,23 @@ def cmd_fetch(args) -> int:
         from .fetchers import cftc
 
         try:
-            recs = cftc.fetch_year(args.year)
-        except cftc.FetchError as exc:
+            recs = cftc.from_file(args.file) if args.file else cftc.fetch_year(args.year)
+        except (cftc.FetchError, OSError) as exc:
             print(f"[fetch cot] {exc}")
+            return 1
+        if not recs:
+            print("[fetch cot] no COMEX gold rows found in source.")
             return 1
         for r in recs:
             store.save_cot(r)
-        print(f"[fetch cot] stored {len(recs)} COT record(s); latest {recs[-1].report_date}.")
+        src = f"file {args.file}" if args.file else f"year {args.year or 'current'}"
+        print(f"[fetch cot] stored {len(recs)} COT record(s) from {src}; latest {recs[-1].report_date}.")
     elif args.source == "price":
         from .fetchers import price
 
         try:
-            bars = price.fetch(args.symbol)
-        except price.FetchError as exc:
+            bars = price.from_file(args.file) if args.file else price.fetch(args.symbol)
+        except (price.FetchError, OSError) as exc:
             print(f"[fetch price] {exc}")
             return 1
         for b in bars[-260:]:  # keep ~1y of daily bars
@@ -130,10 +134,17 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--dry-run", action="store_true", help="do not append to history log")
     a.set_defaults(func=cmd_assess)
 
-    f = sub.add_parser("fetch", help="pull automatable rows")
+    f = sub.add_parser("fetch", help="pull automatable rows (or import a local file)")
     f.add_argument("source", choices=["cot", "price"])
     f.add_argument("--year", type=int, default=None)
     f.add_argument("--symbol", default="xauusd")
+    f.add_argument(
+        "--file",
+        default=None,
+        help="import from a locally-downloaded file instead of fetching "
+        "(cot: annual .zip or .txt/.csv; price: OHLC .csv). Sidesteps "
+        "Cloudflare/network blocks.",
+    )
     f.set_defaults(func=cmd_fetch)
 
     ad = sub.add_parser("add", help="manual journal entry")

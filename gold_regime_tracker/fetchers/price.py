@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import csv
 import io
-import urllib.request
 from datetime import date, datetime
 from typing import Optional
 
 from ..models import PriceBar
+from .http import HttpError, get
 
 STOOQ_URL = "https://stooq.com/q/d/l/?s={symbol}&i=d"
 DEFAULT_SYMBOL = "xauusd"
@@ -26,9 +26,8 @@ class FetchError(RuntimeError):
 def _download(symbol: str, timeout: int = 30) -> str:
     url = STOOQ_URL.format(symbol=symbol)
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except Exception as exc:
+        return get(url, timeout=timeout).decode("utf-8", errors="replace")
+    except HttpError as exc:
         raise FetchError(f"Price download failed for {symbol}: {exc}") from exc
 
 
@@ -80,6 +79,13 @@ def parse_stooq(text: str) -> list[PriceBar]:
 
 def fetch(symbol: str = DEFAULT_SYMBOL) -> list[PriceBar]:
     return parse_stooq(_download(symbol))
+
+
+def from_file(path: str) -> list[PriceBar]:
+    """Import from a locally-downloaded OHLC CSV (Date,...,Close header).
+    Sidesteps Cloudflare/network blocks — download once in a browser."""
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        return parse_stooq(fh.read())
 
 
 def latest_weekly_close(symbol: str = DEFAULT_SYMBOL) -> Optional[PriceBar]:
