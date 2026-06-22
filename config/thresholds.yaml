@@ -71,6 +71,26 @@ MACRO:
   hot_cpi_surprise_bp: 10      # CPI surprise (bp) above consensus => hot
   # Brent rising + Hormuz tense => inflationary/hawkish
 
+# Auto-fetch of the hike/cut odds (FedWatch methodology from CME 30-Day Fed
+# Funds futures). hike_odds is the implied probability of a step at the NEXT
+# FOMC meeting. CPI surprise and Hormuz state stay manual; this fetch preserves
+# whatever was last entered for them.
+macro_fetch:
+  cme_product: 305                 # CME 30-Day Fed Funds futures product code
+  step_bp: 25                      # assumed move size for the binary odds model
+  min_after_days: 7                # if the meeting is later than this from month-end, use the next-month contract
+  current_target_midpoint: 5.375   # PLACEHOLDER — set to your scenario's target-rate midpoint (%)
+  fomc_meetings:                   # decision dates (YYYY-MM-DD); update yearly
+    - 2026-01-28
+    - 2026-03-18
+    - 2026-04-29
+    - 2026-06-17
+    - 2026-07-29
+    - 2026-09-16
+    - 2026-10-28
+    - 2026-12-16
+  brent_symbol: ""                 # optional Stooq symbol for Brent direction (e.g. "cb.f"); blank = skip
+
 # --- State machine knobs (§5, §7) ---
 state_machine:
   persistence_periods: 2       # §7.2 no single-print actions

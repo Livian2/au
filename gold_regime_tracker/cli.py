@@ -62,6 +62,56 @@ def cmd_fetch(args) -> int:
         for b in bars[-260:]:  # keep ~1y of daily bars
             store.save_price(b)
         print(f"[fetch price] stored {min(len(bars),260)} bar(s); latest {bars[-1].date} close={bars[-1].close}.")
+    elif args.source == "macro":
+        return _fetch_macro(args)
+    return 0
+
+
+def _fetch_macro(args) -> int:
+    from .fetchers import fedwatch
+
+    cfg = load_config(args.config)
+    today = _today(args)
+    try:
+        settl = fedwatch.from_file(args.file) if args.file else fedwatch.fetch_settlements(cfg)
+    except (fedwatch.FetchError, OSError) as exc:
+        print(f"[fetch macro] {exc}")
+        return 1
+    res = fedwatch.compute(cfg, today, settl)
+    if res is None:
+        print("[fetch macro] no upcoming FOMC meeting in config, or no matching contract month in the data.")
+        return 1
+
+    # Optional Brent direction (last close vs ~4 weeks prior).
+    brent_close, brent_dir = None, ""
+    symbol = (cfg.get("macro_fetch") or {}).get("brent_symbol") or ""
+    if symbol:
+        try:
+            from .fetchers import price as pricef
+
+            bars = pricef.fetch(symbol)
+            if len(bars) >= 21:
+                brent_close = bars[-1].close
+                brent_dir = "rising" if bars[-1].close > bars[-21].close else "falling" if bars[-1].close < bars[-21].close else "flat"
+        except Exception as exc:  # Brent is a nice-to-have; never fail the row on it
+            print(f"[fetch macro] brent skipped: {exc}")
+
+    # Merge: preserve the manual fields (CPI surprise, Hormuz) from the last entry.
+    prev = max(store.load_macro(), key=lambda r: r.date, default=None)
+    rec = MacroRecord(
+        date=today.isoformat(),
+        hike_odds_pct=res["hike_odds_pct"],
+        last_cpi_surprise_bp=(prev.last_cpi_surprise_bp if prev else None),
+        brent_close=(brent_close if brent_close is not None else (prev.brent_close if prev else None)),
+        brent_direction=(brent_dir or (prev.brent_direction if prev else "")),
+        hormuz_state=(prev.hormuz_state if prev else ""),
+        note=(f"FedWatch-implied for {res['meeting']} ({res['method']}): hike "
+              f"{res['hike_odds_pct']}% (implied {res['implied_change_bp']:+}bp to "
+              f"{res['implied_end_rate']}%). CPI/Hormuz preserved from last manual entry."),
+    )
+    store.save_macro(rec)
+    print(f"[fetch macro] {res['meeting']}: hike odds {res['hike_odds_pct']}% "
+          f"(implied {res['implied_change_bp']:+}bp). Saved.")
     return 0
 
 
@@ -145,15 +195,16 @@ def build_parser() -> argparse.ArgumentParser:
     a.set_defaults(func=cmd_assess)
 
     f = sub.add_parser("fetch", help="pull automatable rows (or import a local file)")
-    f.add_argument("source", choices=["cot", "price"])
+    f.add_argument("source", choices=["cot", "price", "macro"])
     f.add_argument("--year", type=int, default=None)
     f.add_argument("--symbol", default="xauusd")
+    f.add_argument("--today", default=None, help="override 'today' (YYYY-MM-DD), used by macro")
     f.add_argument(
         "--file",
         default=None,
         help="import from a locally-downloaded file instead of fetching "
-        "(cot: annual .zip or .txt/.csv; price: OHLC .csv). Sidesteps "
-        "Cloudflare/network blocks.",
+        "(cot: annual .zip or .txt/.csv; price: OHLC .csv; macro: CME "
+        "settlements .json). Sidesteps Cloudflare/network blocks.",
     )
     f.set_defaults(func=cmd_fetch)
 

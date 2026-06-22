@@ -48,6 +48,11 @@ jobs:
         continue-on-error: true
         run: python -m gold_regime_tracker fetch price
 
+      - name: Fetch MACRO hike odds (CME FedWatch methodology)
+        id: macro
+        continue-on-error: true
+        run: python -m gold_regime_tracker fetch macro
+
       - name: Bail out if the price fetch failed
         if: steps.price.outcome != 'success'
         run: |

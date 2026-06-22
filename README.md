@@ -173,12 +173,32 @@ then auto-deploys the push.
 
 What it refreshes vs. not:
 
-- **Auto, every week:** `MM_NET`, `MM_SHORT` (CFTC COT), `PRICE` (Stooq), and the
-  chart + regression/swing analysis.
-- **Manual / you maintain:** `CB_BID` (quarterly), `ETF_HOLD`, `MACRO`. Enter
-  them with `add …` and commit `journal/`. `CB_BID` is hand-entered by design
+- **Auto, every week:** `MM_NET`, `MM_SHORT` (CFTC COT), `PRICE` (Stooq), the
+  chart + regression/swing analysis, and the `MACRO` hike odds (FedWatch
+  methodology — see below).
+- **Manual / you maintain:** `CB_BID` (quarterly) and `ETF_HOLD`. Enter them
+  with `add …` and commit `journal/`. `CB_BID` is hand-entered by design
   (§2.4) — it's the highest-weight row, and the tool refuses to let auto-data
-  freshness stand in for it.
+  freshness stand in for it. (`MACRO`'s CPI surprise and Hormuz state also stay
+  manual; the macro fetch preserves whatever you last entered for them.)
+
+### MACRO hike odds (`fetch macro`)
+
+The hike/cut odds are derived the way CME FedWatch does it — from **30-Day Fed
+Funds futures**, which settle to the average daily effective rate over their
+month. A meeting mid-month lets you back out the implied post-meeting rate; for
+a late-month meeting the tool uses the next month's contract (whose whole month
+is at the post-meeting rate) to avoid a tiny-denominator blow-up.
+
+```bash
+python -m gold_regime_tracker fetch macro                 # pull CME settlements
+python -m gold_regime_tracker fetch macro --file cme.json  # or import a saved JSON
+```
+
+Set your scenario's anchors in `config/thresholds.yaml → macro_fetch`:
+`current_target_midpoint` (the current target-rate midpoint), the `fomc_meetings`
+calendar (update yearly), and optionally `brent_symbol` for Brent direction. The
+odds feed the §5 macro **gate**, not a vote.
 
 GitHub's runners have open internet, so the CFTC/Stooq fetches that 403 inside a
 restricted sandbox work there. Notes:
