@@ -1,9 +1,9 @@
 """Static-site exporter (spec §6) for Cloudflare Pages / any static host.
 
-Renders the weekly assessment to a single self-contained ``index.html`` (data
-embedded inline — no fetch, no API, works over file:// too) plus a sidecar
-``assessment.json`` for archiving. Deliberately plain: no flashing, no
-auto-refresh, no push — a page you visit on a schedule, not one that pings you.
+Renders the weekly assessment to a single self-contained ``index.html`` (data and
+the SVG chart embedded inline — no fetch, no API, works over file://) plus a
+sidecar ``assessment.json``. Deliberately calm: no flashing, no auto-refresh, no
+push — a page you visit on a schedule, not one that pings you.
 """
 
 from __future__ import annotations
@@ -13,12 +13,16 @@ import json
 import os
 from datetime import date
 
+from . import store
+from .analysis import ChannelAnalysis, linear_channel
+from .charts import render_price_chart
 from .config import Config
 from .engine import assess
 from .guardrails import EVENT_RISK_DISCLAIMER, reanchor_nag
 from .models import IndicatorState, RegimeAssessment, State
 
 _MANUAL_ROWS = {"CB_BID"}
+_ACCENT = "#c9a14a"
 
 _REGIME_CLASS = {
     "HEALTHY CONSOLIDATION": "healthy",
@@ -41,20 +45,38 @@ def _row_html(s: IndicatorState) -> str:
     badge_cls = "stale" if s.stale else _STATE_CLASS[s.state]
     manual = '<span class="tag">MANUAL</span>' if s.id in _MANUAL_ROWS else ""
     persist = (
-        f'<span class="meta">persisted {s.persisted_periods}p</span>'
+        f'<span class="meta">· {s.persisted_periods}p</span>'
         if s.state != State.HEALTHY
         else ""
     )
-    counts = '' if s.counts else '<span class="meta warn">does not count</span>'
+    counts = '' if s.counts else '<span class="meta warn">· excluded</span>'
     note = f'<div class="note">{_esc(s.note)}</div>' if s.note else ""
     return f"""
-      <tr class="row {badge_cls}">
+      <tr class="row">
         <td class="id">{_esc(s.id)} {manual}</td>
         <td><span class="badge {badge_cls}">{_esc(badge)}</span></td>
-        <td class="val">{_esc(s.value)}</td>
-        <td class="rule">{_esc(s.threshold_hit)}{note}</td>
-        <td class="asof">{_esc(s.as_of)}<br><span class="meta">age {s.staleness_days}d</span> {persist} {counts}</td>
+        <td class="val mono">{_esc(s.value)}</td>
+        <td class="rule"><span class="mono">{_esc(s.threshold_hit)}</span>{note}</td>
+        <td class="asof mono">{_esc(s.as_of)}<br><span class="meta">age {s.staleness_days}d{persist and ' '+persist or ''}</span> {counts}</td>
       </tr>"""
+
+
+def _bounds_panel(ch: ChannelAnalysis | None) -> str:
+    if ch is None:
+        return ""
+    pos_pct = max(0, min(100, round(ch.position * 100)))
+    return f"""
+    <div class="bounds">
+      <div class="bcol"><div class="blabel">Upper bound (+{ch.k:g}σ)</div>
+        <div class="bval mono">${ch.upper_last:,.0f}</div></div>
+      <div class="bcol"><div class="blabel">Trend (fair value)</div>
+        <div class="bval mono">${ch.trend_last:,.0f}</div></div>
+      <div class="bcol"><div class="blabel">Lower bound (−{ch.k:g}σ)</div>
+        <div class="bval mono">${ch.lower_last:,.0f}</div></div>
+      <div class="bcol"><div class="blabel">Position in channel</div>
+        <div class="bval mono">{pos_pct}%</div></div>
+    </div>
+    <div class="bread">{_esc(ch.read)} <span class="meta">({ch.n} weekly closes, ~{ch.n/ch.periods_per_year:.1f}y; trend {ch.annualized_trend_pct:+.0f}%/yr)</span></div>"""
 
 
 def render_html(
@@ -63,6 +85,8 @@ def render_html(
     states,
     today: date,
     cb_stale: bool,
+    bars,
+    channel: ChannelAnalysis | None,
     blocked_until=None,
 ) -> str:
     label = assessment.label.value
@@ -72,14 +96,18 @@ def render_html(
     rows = "".join(_row_html(s) for s in states)
     firing = ", ".join(assessment.firing_rows) if assessment.firing_rows else "none"
 
+    chart_svg = render_price_chart(
+        bars, channel, reference_levels=cfg.get("reference_levels"), accent=_ACCENT
+    )
+    bounds_panel = _bounds_panel(channel)
+
     notices = []
     if blocked_until is not None:
         notices.append(
             f'<div class="notice">Weekly cap (§7.3): assessment already ran this week. '
             f'Next recompute {_esc(blocked_until)}. Showing the standing verdict.</div>'
         )
-    overdue_manual = [s for s in states if s.id in _MANUAL_ROWS and s.stale]
-    for s in overdue_manual:
+    for s in [s for s in states if s.id in _MANUAL_ROWS and s.stale]:
         notices.append(
             f'<div class="notice warn">Stale manual row: {_esc(s.id)} is '
             f'{s.staleness_days}d old — this verdict carries a warning, not a clean read (§6).</div>'
@@ -93,12 +121,11 @@ def render_html(
         notices.append(f'<div class="notice">{_esc(n)}</div>')
     notices_html = "\n".join(notices)
 
+    last_close = next((b.close for b in reversed(bars) if b.close is not None), None)
+    price_pill = f'<span class="price-pill mono">${last_close:,.0f}</span>' if last_close else ""
+
     data_json = json.dumps(
-        {
-            "assessment": assessment.to_dict(),
-            "generated": today.isoformat(),
-        },
-        indent=2,
+        {"assessment": assessment.to_dict(), "generated": today.isoformat()}, indent=2
     )
 
     return f"""<!doctype html>
@@ -109,70 +136,139 @@ def render_html(
 <title>Gold Regime Tracker — {_esc(today.isoformat())}</title>
 <style>
   :root {{
-    --bg:#15171c; --panel:#1d2027; --line:#2c303a; --text:#d7dae0; --muted:#878d99;
-    --healthy:#5fb37a; --transition:#d8a24a; --regime:#cf5b5b; --stale:#6b7180;
+    --bg:#0f1115; --bg2:#0b0d11; --panel:#171a21; --panel2:#1b1f28; --line:#262b36;
+    --text:#e6e8ee; --muted:#8b92a1; --faint:#5b6270; --gold:{_ACCENT};
+    --healthy:#5fb37a; --transition:#e0ad52; --regime:#d96363; --stale:#6b7180;
   }}
   * {{ box-sizing:border-box; }}
-  body {{ margin:0; background:var(--bg); color:var(--text);
-    font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }}
-  .wrap {{ max-width:920px; margin:0 auto; padding:28px 20px 60px; }}
-  h1 {{ font-size:15px; font-weight:600; letter-spacing:.04em; color:var(--muted);
-    text-transform:uppercase; margin:0 0 18px; }}
-  .headline {{ background:var(--panel); border:1px solid var(--line); border-left-width:4px;
-    border-radius:8px; padding:20px 22px; margin-bottom:16px; }}
+  html {{ -webkit-text-size-adjust:100%; }}
+  body {{ margin:0; color:var(--text);
+    background:radial-gradient(1200px 600px at 50% -10%, #1a1d25 0%, var(--bg) 55%, var(--bg2) 100%);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }}
+  .mono {{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }}
+  .wrap {{ max-width:960px; margin:0 auto; padding:30px 22px 64px; }}
+
+  header.top {{ display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; margin-bottom:22px; padding-bottom:16px; border-bottom:1px solid var(--line); }}
+  .brand {{ display:flex; align-items:center; gap:10px; }}
+  .dot {{ width:10px; height:10px; border-radius:50%; background:var(--gold);
+    box-shadow:0 0 0 4px rgba(201,161,74,.14); }}
+  .brand h1 {{ font-size:16px; font-weight:650; letter-spacing:.02em; margin:0; }}
+  .brand .tagline {{ color:var(--muted); font-size:12px; }}
+  .asof-top {{ color:var(--muted); font-size:13px; text-align:right; }}
+
+  .card {{ background:linear-gradient(180deg,var(--panel) 0%,var(--panel2) 100%);
+    border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 0 rgba(255,255,255,.02),
+    0 12px 30px -18px rgba(0,0,0,.7); }}
+
+  .headline {{ padding:22px 24px; border-left:4px solid var(--muted); margin-bottom:18px; }}
   .headline.healthy {{ border-left-color:var(--healthy); }}
   .headline.transition {{ border-left-color:var(--transition); }}
   .headline.regime {{ border-left-color:var(--regime); }}
-  .regime-label {{ font-size:24px; font-weight:700; margin:0 0 6px; }}
+  .hl-top {{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }}
+  .regime-label {{ font-size:26px; font-weight:750; letter-spacing:.01em; margin:0; }}
   .healthy .regime-label {{ color:var(--healthy); }}
   .transition .regime-label {{ color:var(--transition); }}
   .regime .regime-label {{ color:var(--regime); }}
-  .sub {{ color:var(--muted); font-size:13px; }}
-  .rec {{ margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }}
-  .conf-bar {{ height:6px; background:var(--line); border-radius:3px; margin:10px 0 4px; overflow:hidden; }}
-  .conf-fill {{ height:100%; }}
+  .price-pill {{ margin-left:auto; font-size:15px; font-weight:600; color:var(--gold);
+    border:1px solid rgba(201,161,74,.35); background:rgba(201,161,74,.08);
+    padding:4px 12px; border-radius:999px; }}
+  .sub {{ color:var(--muted); font-size:13px; margin-top:8px; }}
+  .conf-bar {{ height:7px; background:var(--line); border-radius:4px; margin:12px 0 4px; overflow:hidden; }}
+  .conf-fill {{ height:100%; border-radius:4px; }}
   .healthy .conf-fill {{ background:var(--healthy); }}
   .transition .conf-fill {{ background:var(--transition); }}
   .regime .conf-fill {{ background:var(--regime); }}
-  table {{ width:100%; border-collapse:collapse; background:var(--panel);
-    border:1px solid var(--line); border-radius:8px; overflow:hidden; }}
-  th, td {{ text-align:left; padding:10px 12px; border-top:1px solid var(--line);
-    vertical-align:top; font-size:13px; }}
-  th {{ color:var(--muted); font-weight:600; text-transform:uppercase;
-    letter-spacing:.04em; font-size:11px; border-top:none; }}
-  .id {{ font-weight:600; white-space:nowrap; }}
+  .rec {{ margin-top:15px; padding-top:15px; border-top:1px solid var(--line); font-size:14px; }}
+  .rec b {{ color:var(--text); }}
+
+  section {{ margin-top:22px; }}
+  section > h2 {{ font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin:0 0 10px; font-weight:600; }}
+
+  .chart-card {{ padding:18px 18px 8px; }}
+  .price-chart {{ width:100%; height:auto; display:block; }}
+  .price-chart .grid {{ stroke:var(--line); stroke-width:1; }}
+  .price-chart .ylab {{ fill:var(--muted); font:11px ui-monospace,monospace; text-anchor:end; }}
+  .price-chart .xlab {{ fill:var(--muted); font:11px ui-monospace,monospace; text-anchor:middle; }}
+  .price-chart .band {{ fill:rgba(201,161,74,.08); }}
+  .price-chart .bound {{ stroke:rgba(201,161,74,.45); stroke-width:1.2; stroke-dasharray:5 4; }}
+  .price-chart .trend {{ stroke:rgba(230,232,238,.45); stroke-width:1.2; stroke-dasharray:2 4; }}
+  .price-chart .price {{ fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }}
+  .price-chart .ref {{ stroke:rgba(139,146,161,.35); stroke-width:1; stroke-dasharray:1 5; }}
+  .price-chart .reflab {{ fill:var(--muted); font:10px ui-monospace,monospace; text-anchor:end; }}
+  .legend {{ display:flex; gap:18px; flex-wrap:wrap; color:var(--muted); font-size:12px;
+    padding:6px 6px 12px; }}
+  .legend span {{ display:inline-flex; align-items:center; gap:7px; }}
+  .swatch {{ width:16px; height:0; border-top:2px solid; display:inline-block; }}
+  .sw-price {{ border-top-color:var(--gold); }}
+  .sw-trend {{ border-top:2px dashed rgba(230,232,238,.6); }}
+  .sw-band {{ width:16px; height:11px; border:none; background:rgba(201,161,74,.18);
+    border-top:1px dashed rgba(201,161,74,.6); border-bottom:1px dashed rgba(201,161,74,.6); }}
+
+  .bounds {{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--line); border-top:1px solid var(--line); }}
+  .bcol {{ background:var(--panel2); padding:14px 16px; }}
+  .blabel {{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }}
+  .bval {{ font-size:20px; font-weight:650; margin-top:4px; }}
+  .bread {{ padding:13px 16px; color:var(--text); font-size:13px; background:var(--panel); }}
+
+  table {{ width:100%; border-collapse:collapse; overflow:hidden; }}
+  thead th {{ text-align:left; padding:11px 14px; color:var(--muted); font-weight:600;
+    text-transform:uppercase; letter-spacing:.06em; font-size:10.5px; }}
+  tbody td {{ padding:13px 14px; border-top:1px solid var(--line); vertical-align:top; font-size:13px; }}
+  tbody tr:hover td {{ background:rgba(255,255,255,.015); }}
+  .id {{ font-weight:650; white-space:nowrap; }}
   .val {{ color:var(--text); }}
   .rule, .asof, .meta {{ color:var(--muted); }}
-  .badge {{ display:inline-block; padding:2px 8px; border-radius:11px; font-size:11px;
-    font-weight:700; letter-spacing:.03em; }}
-  .badge.healthy {{ background:rgba(95,179,122,.15); color:var(--healthy); }}
-  .badge.transition {{ background:rgba(216,162,74,.15); color:var(--transition); }}
-  .badge.regime {{ background:rgba(207,91,91,.15); color:var(--regime); }}
-  .badge.stale {{ background:rgba(107,113,128,.18); color:var(--stale); }}
-  .tag {{ font-size:10px; color:var(--muted); border:1px solid var(--line);
-    border-radius:4px; padding:1px 5px; margin-left:4px; }}
-  .note {{ margin-top:5px; color:var(--text); font-size:12px; opacity:.85; }}
+  .badge {{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px;
+    font-weight:700; letter-spacing:.04em; }}
+  .badge.healthy {{ background:rgba(95,179,122,.16); color:var(--healthy); }}
+  .badge.transition {{ background:rgba(224,173,82,.16); color:var(--transition); }}
+  .badge.regime {{ background:rgba(217,99,99,.16); color:var(--regime); }}
+  .badge.stale {{ background:rgba(107,113,128,.2); color:var(--stale); }}
+  .tag {{ font-size:9.5px; color:var(--muted); border:1px solid var(--line);
+    border-radius:5px; padding:1px 6px; margin-left:5px; vertical-align:middle; }}
+  .note {{ margin-top:6px; color:var(--text); font-size:12px; opacity:.82; line-height:1.5; }}
   .meta.warn {{ color:var(--regime); }}
-  .firing {{ margin:16px 0; color:var(--muted); font-size:13px; }}
+
+  .firing {{ margin:16px 2px; color:var(--muted); font-size:13px; }}
   .firing b {{ color:var(--text); }}
-  .notice {{ background:var(--panel); border:1px solid var(--line);
-    border-left:3px solid var(--muted); border-radius:6px; padding:10px 14px;
-    margin:8px 0; font-size:13px; color:var(--text); }}
+  .notice {{ border:1px solid var(--line); border-left:3px solid var(--muted);
+    border-radius:8px; padding:11px 15px; margin:9px 0; font-size:13px;
+    color:var(--text); background:var(--panel); }}
   .notice.warn {{ border-left-color:var(--regime); }}
-  footer {{ margin-top:26px; color:var(--muted); font-size:12px;
-    border-top:1px solid var(--line); padding-top:14px; }}
-  section {{ margin-top:22px; }}
-  section > h2 {{ font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-    color:var(--muted); margin:0 0 8px; }}
+  footer {{ margin-top:30px; color:var(--muted); font-size:12px;
+    border-top:1px solid var(--line); padding-top:16px; line-height:1.7; }}
+  @media (max-width:620px) {{
+    .bounds {{ grid-template-columns:repeat(2,1fr); }}
+    .regime-label {{ font-size:22px; }}
+    table, thead, tbody, tr, td {{ display:block; }}
+    thead {{ display:none; }}
+    tbody td {{ border:none; padding:4px 14px; }}
+    tbody tr {{ border-top:1px solid var(--line); padding:8px 0; }}
+  }}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Gold Regime Tracker &middot; assessment for {_esc(today.isoformat())}</h1>
+  <header class="top">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>Gold Regime Tracker</h1>
+        <div class="tagline">Structural regime monitor for a physical holder — trend confirmation, not a trading signal.</div>
+      </div>
+    </div>
+    <div class="asof-top">assessment<br><span class="mono">{_esc(today.isoformat())}</span></div>
+  </header>
 
-  <div class="headline {label_cls}">
-    <div class="regime-label">{_esc(label)}</div>
-    <div class="sub">Macro gate: {_esc(assessment.macro_gate.value)} &nbsp;|&nbsp;
+  <div class="card headline {label_cls}">
+    <div class="hl-top">
+      <div class="regime-label">{_esc(label)}</div>
+      {price_pill}
+    </div>
+    <div class="sub">Macro gate: {_esc(assessment.macro_gate.value)} &nbsp;·&nbsp;
       Confidence {conf}% (fraction of fresh rows agreeing)</div>
     <div class="conf-bar"><div class="conf-fill" style="width:{conf}%"></div></div>
     <div class="rec"><b>Recommendation:</b> {_esc(assessment.recommendation)}</div>
@@ -181,19 +277,34 @@ def render_html(
   {notices_html}
 
   <section>
-    <h2>Rows</h2>
-    <table>
-      <thead><tr><th>Indicator</th><th>State</th><th>Value</th><th>Rule</th><th>As-of</th></tr></thead>
-      <tbody>{rows}</tbody>
-    </table>
+    <h2>Price &amp; 3-year regression channel</h2>
+    <div class="card chart-card">
+      {chart_svg}
+      <div class="legend">
+        <span><i class="swatch sw-price"></i> weekly close</span>
+        <span><i class="swatch sw-trend"></i> regression trend</span>
+        <span><i class="swatch sw-band"></i> ±{(channel.k if channel else 2):g}σ bounds</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">{bounds_panel}</div>
   </section>
 
-  <div class="firing">Firing (TRANSITION/REGIME, counting): <b>{_esc(firing)}</b></div>
+  <section>
+    <h2>Indicator rows</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Indicator</th><th>State</th><th>Value</th><th>Rule</th><th>As-of</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+    </div>
+    <div class="firing">Firing (TRANSITION/REGIME, counting): <b>{_esc(firing)}</b></div>
+  </section>
 
   <footer>
     {_esc(EVENT_RISK_DISCLAIMER)}<br>
-    This is a static snapshot — it does not auto-refresh. Regenerate on your
-    weekly schedule with <code>export-web</code>.
+    The regression channel is descriptive structure (least-squares trend ±{(channel.k if channel else 2):g}σ
+    of residuals), not a forecast. Static snapshot — regenerate on your weekly
+    schedule with <span class="mono">export-web</span>.
   </footer>
 
   <script type="application/json" id="assessment-data">{data_json}</script>
@@ -204,11 +315,19 @@ def render_html(
 
 
 def build_site(cfg: Config, out_dir: str, today: date, force: bool = False) -> str:
-    """Run an assessment and write index.html + assessment.json into out_dir.
-    Returns the path to the written index.html."""
+    """Run an assessment + price analysis and write index.html + assessment.json."""
     assessment, states, cb_stale, blocked = assess(cfg, today, force=force)
+
+    bars = sorted(store.load_price(), key=lambda b: b.date)
+    acfg = cfg.get("analysis") or {}
+    channel = linear_channel(
+        bars,
+        k=float(acfg.get("channel_sigma", 2.0)),
+        periods_per_year=float(acfg.get("periods_per_year", 52.0)),
+    )
+
     os.makedirs(out_dir, exist_ok=True)
-    page = render_html(cfg, assessment, states, today, cb_stale, blocked_until=blocked)
+    page = render_html(cfg, assessment, states, today, cb_stale, bars, channel, blocked_until=blocked)
     index_path = os.path.join(out_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as fh:
         fh.write(page)

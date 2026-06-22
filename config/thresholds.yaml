@@ -77,6 +77,11 @@ state_machine:
   transition_min_rows: 3       # §5 STEP 4
   regime_min_rows: 3           # §5 STEP 4
 
+# --- Price-structure analysis (chart bounds) ---
+analysis:
+  channel_sigma: 2.0       # upper/lower bound = regression trend ± this many residual σ
+  periods_per_year: 52     # weekly closes
+
 # --- Guardrails (§7) ---
 guardrails:
   min_decision_interval_days: 90   # §7.1 quarterly at most

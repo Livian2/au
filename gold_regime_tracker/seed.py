@@ -7,8 +7,38 @@ reference levels quoted in the spec; they are illustrative, not live.
 
 from __future__ import annotations
 
+import math
+import random
+from datetime import date, timedelta
+
 from . import store
 from .models import CbRecord, CotRecord, EtfRecord, MacroRecord, PriceBar
+
+
+def _synthetic_price_history(weeks: int = 157, end: date = date(2026, 6, 19)) -> list[PriceBar]:
+    """Deterministic ~3-year weekly close series climbing ~2400 -> ~4400 with
+    cyclical swings and noise. Illustrative only — replace with real data via
+    `fetch price`. The last close is pinned to 4402 to match the spec baseline.
+    """
+    rng = random.Random(20260622)
+    start_price, end_price = 2400.0, 4350.0
+    closes: list[float] = []
+    for w in range(weeks):
+        f = w / (weeks - 1)
+        trend = start_price + (end_price - start_price) * f
+        cycle = 140.0 * math.sin(f * math.pi * 3.2)          # multi-month swings
+        drift = rng.gauss(0, 28.0)                            # week-to-week noise
+        closes.append(round(trend + cycle + drift, 1))
+    closes[-1] = 4402.0  # pin the latest weekly close to the baseline print
+
+    bars: list[PriceBar] = []
+    window = 40  # ~200 trading days for the moving-average proxy
+    for i, close in enumerate(closes):
+        d = end - timedelta(weeks=(weeks - 1 - i))
+        ma = round(sum(closes[max(0, i - window + 1): i + 1]) / min(i + 1, window), 1)
+        dist = round((close - ma) / ma * 100, 2)
+        bars.append(PriceBar(date=d.isoformat(), close=close, sma200=ma, dist_200dma_pct=dist))
+    return bars
 
 
 def _cot(report_date: str, long_: int, short_: int, oi: int) -> CotRecord:
@@ -36,15 +66,10 @@ def seed_baseline() -> int:
         store.save_cot(_cot(d, lng, sht, oi))
         count += 1
 
-    # Price — weekly closes above the 4300 support shelf (HEALTHY).
-    for d, close, sma200 in [
-        ("2026-05-29", 4395.0, 4330.0),
-        ("2026-06-05", 4410.0, 4335.0),
-        ("2026-06-12", 4388.0, 4338.0),
-        ("2026-06-19", 4402.0, 4340.0),
-    ]:
-        dist = round((close - sma200) / sma200 * 100, 2)
-        store.save_price(PriceBar(date=d, close=close, sma200=sma200, dist_200dma_pct=dist))
+    # Price — ~3 years of weekly closes, deterministic, ending ~4402 above the
+    # 4300 support shelf (HEALTHY). Gives the dashboard chart its history.
+    for bar in _synthetic_price_history():
+        store.save_price(bar)
         count += 1
 
     # ETF — holdings above 4000t with positive YTD flow (HEALTHY); May first outflow.
