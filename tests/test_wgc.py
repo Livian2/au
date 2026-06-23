@@ -44,6 +44,15 @@ def test_missing_required_columns_raises():
         wgc.parse_csv("foo,bar\n1,2\n", CFG)
 
 
+def test_cli_fetch_etf_skips_cleanly_without_source(capsys):
+    # No source_url and no --file => exit 0 (workflow no-op), nothing written.
+    from gold_regime_tracker.cli import main
+
+    rc = main(["fetch", "etf"])
+    assert rc == 0
+    assert "skipping" in capsys.readouterr().out.lower()
+
+
 def test_classifies_into_transition_band():
     # Sanity: the imported tail (4100t, ytd<0) flows through the classifier.
     from datetime import date

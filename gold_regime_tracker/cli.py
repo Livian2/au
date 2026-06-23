@@ -81,6 +81,13 @@ def _fetch_etf(args) -> int:
     from .fetchers import wgc
 
     cfg = load_config(args.config)
+    source_url = (cfg.get("etf_fetch") or {}).get("source_url") or ""
+    if not args.file and not source_url:
+        # Nothing to do — the WGC dataset is a manual monthly download. Skip
+        # cleanly (exit 0) so the weekly workflow step is a no-op, not a failure,
+        # until you set etf_fetch.source_url or pass --file.
+        print("[fetch etf] no etf_fetch.source_url and no --file; skipping (import monthly with `fetch etf --file`).")
+        return 0
     try:
         recs = wgc.from_file(args.file, cfg) if args.file else wgc.fetch(cfg)
     except (wgc.FetchError, OSError) as exc:

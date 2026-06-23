@@ -53,6 +53,11 @@ jobs:
         continue-on-error: true
         run: python -m gold_regime_tracker fetch macro
 
+      - name: Fetch ETF holdings (WGC — no-op unless etf_fetch.source_url is set)
+        id: etf
+        continue-on-error: true
+        run: python -m gold_regime_tracker fetch etf
+
       - name: Bail out if the price fetch failed
         if: steps.price.outcome != 'success'
         run: |
