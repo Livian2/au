@@ -2,12 +2,12 @@ name: Weekly refresh
 
 # Auto-populates the fast rows once a week and redeploys the static dashboard.
 #
-# What this DOES refresh (auto): MM_NET, MM_SHORT (CFTC COT) and PRICE (Stooq),
-# plus the chart and regression/swing analysis.
-# What it does NOT: the manual journal rows — CB_BID (quarterly), and ETF/MACRO
-# until you wire their fetchers. Those you enter by hand and commit to journal/;
-# the spec keeps CB_BID manual on purpose (§2.4) so auto-data freshness can't
-# masquerade as conviction.
+# What this DOES refresh (auto): MM_NET, MM_SHORT (CFTC COT), PRICE (Stooq), the
+# MACRO hike odds (CME FedWatch methodology), plus the chart and analysis.
+# What it does NOT: ETF_HOLD (WGC dataset — import monthly with `fetch etf
+# --file`, or set etf_fetch.source_url to auto-pull) and CB_BID (quarterly,
+# hand-entered by design, §2.4, so auto-data freshness can't masquerade as
+# conviction). Both persist in the committed journal/.
 #
 # Runner note: GitHub's runners have open internet, so the CFTC/Stooq fetches
 # that 403 inside a restricted sandbox work fine here.

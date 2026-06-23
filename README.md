@@ -176,11 +176,28 @@ What it refreshes vs. not:
 - **Auto, every week:** `MM_NET`, `MM_SHORT` (CFTC COT), `PRICE` (Stooq), the
   chart + regression/swing analysis, and the `MACRO` hike odds (FedWatch
   methodology — see below).
-- **Manual / you maintain:** `CB_BID` (quarterly) and `ETF_HOLD`. Enter them
-  with `add …` and commit `journal/`. `CB_BID` is hand-entered by design
-  (§2.4) — it's the highest-weight row, and the tool refuses to let auto-data
-  freshness stand in for it. (`MACRO`'s CPI surprise and Hormuz state also stay
-  manual; the macro fetch preserves whatever you last entered for them.)
+- **Semi-auto / monthly import:** `ETF_HOLD` (WGC dataset, see below) — import
+  the CSV once a month and commit `journal/`.
+- **Manual / you maintain:** `CB_BID` (quarterly). Enter it with `add cb …` and
+  commit `journal/`. It's hand-entered by design (§2.4) — the highest-weight
+  row, and the tool refuses to let auto-data freshness stand in for it.
+  (`MACRO`'s CPI surprise and Hormuz state also stay manual; the macro fetch
+  preserves whatever you last entered for them.)
+
+### ETF holdings (`fetch etf`)
+
+The WGC "Global gold-backed ETF holdings and flows" dataset has no clean API —
+download it from Goldhub, save the sheet as **CSV**, and import:
+
+```bash
+python -m gold_regime_tracker fetch etf --file wgc_etf.csv
+```
+
+The parser auto-detects the month / tonnes / flow / AUM columns and computes
+per-month YTD flow. If it guesses wrong, set the exact headers under
+`etf_fetch.columns` in config (and `flow_scale: 1000000` if the file is in USD
+millions). Set `etf_fetch.source_url` to a stable CSV URL to also auto-fetch in
+CI; left blank, it's import-only (the realistic monthly-manual path).
 
 ### MACRO hike odds (`fetch macro`)
 

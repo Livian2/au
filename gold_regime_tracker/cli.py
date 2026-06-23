@@ -64,6 +64,25 @@ def cmd_fetch(args) -> int:
         print(f"[fetch price] stored {min(len(bars),260)} bar(s); latest {bars[-1].date} close={bars[-1].close}.")
     elif args.source == "macro":
         return _fetch_macro(args)
+    elif args.source == "etf":
+        return _fetch_etf(args)
+    return 0
+
+
+def _fetch_etf(args) -> int:
+    from .fetchers import wgc
+
+    cfg = load_config(args.config)
+    try:
+        recs = wgc.from_file(args.file, cfg) if args.file else wgc.fetch(cfg)
+    except (wgc.FetchError, OSError) as exc:
+        print(f"[fetch etf] {exc}")
+        return 1
+    for r in recs:
+        store.save_etf(r)
+    last = recs[-1]
+    print(f"[fetch etf] stored {len(recs)} month(s); latest {last.month}: "
+          f"{last.tonnes}t, ytd_flow={last.ytd_flow_usd}.")
     return 0
 
 
@@ -195,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.set_defaults(func=cmd_assess)
 
     f = sub.add_parser("fetch", help="pull automatable rows (or import a local file)")
-    f.add_argument("source", choices=["cot", "price", "macro"])
+    f.add_argument("source", choices=["cot", "price", "macro", "etf"])
     f.add_argument("--year", type=int, default=None)
     f.add_argument("--symbol", default="xauusd")
     f.add_argument("--today", default=None, help="override 'today' (YYYY-MM-DD), used by macro")
@@ -204,7 +223,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="import from a locally-downloaded file instead of fetching "
         "(cot: annual .zip or .txt/.csv; price: OHLC .csv; macro: CME "
-        "settlements .json). Sidesteps Cloudflare/network blocks.",
+        "settlements .json; etf: WGC holdings .csv). Sidesteps "
+        "Cloudflare/network blocks.",
     )
     f.set_defaults(func=cmd_fetch)
 

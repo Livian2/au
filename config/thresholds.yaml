@@ -91,6 +91,19 @@ macro_fetch:
     - 2026-12-16
   brent_symbol: ""                 # optional Stooq symbol for Brent direction (e.g. "cb.f"); blank = skip
 
+# Import of the WGC "Global gold-backed ETF holdings and flows" dataset (§2.3).
+# No clean API — download the file, save as CSV, and `fetch etf --file <path>`.
+etf_fetch:
+  source_url: ""                   # optional direct CSV URL; blank => --file only
+  tonnes_scale: 1                  # multiply tonnes values (use if the file is in a different unit)
+  flow_scale: 1                    # multiply flow USD (e.g. 1000000 if the file is in USD millions)
+  aum_scale: 1
+  columns:                         # override if header auto-detection picks the wrong column
+    month: ""                      # e.g. "Date"
+    tonnes: ""                     # e.g. "Total (tonnes)"
+    flow: ""                       # e.g. "Total flows (US$)"
+    aum: ""                        # e.g. "Total AUM (US$)"
+
 # --- State machine knobs (§5, §7) ---
 state_machine:
   persistence_periods: 2       # §7.2 no single-print actions
