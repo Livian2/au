@@ -25,26 +25,31 @@ class FetchError(RuntimeError):
     pass
 
 
-_ALIASES = {
-    "month": ("month", "date", "period"),
-    "tonnes": ("tonne", "total", "holdings"),
-    "flow": ("flow", "net flow", "fund flow"),
-    "aum": ("aum", "value", "assets"),
+# Priority-ordered match phrases per field. Earlier phrases win, so the "Total"
+# column beats a regional "North America (tonnes)" column when both exist.
+_PRIORITY = {
+    "month": ["date", "month", "period"],
+    "tonnes": ["total (tonnes)", "total tonnes", "total holdings", "total", "tonne", "holdings"],
+    "flow": ["total flows", "total flow", "total net flow", "total (us$)", "net flow", "fund flow", "flow"],
+    "aum": ["total aum", "total assets", "assets under", "aum", "value", "assets"],
 }
 
 
 def _pick_columns(headers: list[str], overrides: dict) -> dict:
     cols: dict[str, Optional[str]] = {"month": None, "tonnes": None, "flow": None, "aum": None}
-    lower = {h.lower().strip(): h for h in headers}
+    pairs = [(h, h.lower().strip()) for h in headers]
+    used: set[str] = set()
     for key in cols:
         ov = overrides.get(key)
         if ov and ov in headers:
             cols[key] = ov
+            used.add(ov)
             continue
-        for alias in _ALIASES[key]:
-            match = next((orig for low, orig in lower.items() if alias in low), None)
+        for phrase in _PRIORITY[key]:
+            match = next((orig for orig, low in pairs if phrase in low and orig not in used), None)
             if match:
                 cols[key] = match
+                used.add(match)
                 break
     if not cols["month"] or not cols["tonnes"]:
         raise FetchError(

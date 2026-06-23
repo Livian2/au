@@ -113,6 +113,14 @@
   .chip-k { color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
   .chip-v { font-size:12.5px; color:var(--text); font-weight:550; }
   .rule, .asof, .meta { color:var(--muted); }
+  .src-table { width:100%; }
+  .src-feed { font-weight:600; white-space:nowrap; }
+  .src-name { color:var(--muted); }
+  .src-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+    margin-right:9px; vertical-align:middle; }
+  .src-dot.fresh { background:var(--healthy); }
+  .src-dot.stale { background:var(--transition); }
+  .src-dot.muted { background:var(--stale); }
   .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px;
     font-weight:700; letter-spacing:.04em; }
   .badge.healthy { background:rgba(95,179,122,.16); color:var(--healthy); }
@@ -243,6 +251,11 @@
       </table>
     </div>
     <div class="firing">Firing (TRANSITION/REGIME, counting): <b>MM_NET, MM_SHORT, ETF_HOLD, PRICE</b></div>
+  </section>
+
+  <section>
+    <h2>Data sources &amp; freshness</h2>
+    <div class="card"><table class="src-table"><thead><tr><th>Row</th><th>Source</th><th>Last fetched</th></tr></thead><tbody><tr><td class="src-feed"><span class="src-dot fresh"></span>MM_NET / MM_SHORT</td><td class="src-name">CFTC Disaggregated COT (synthetic demo)</td><td class="asof mono">2026-06-16<br><span class="meta">6d ago</span></td></tr><tr><td class="src-feed"><span class="src-dot fresh"></span>PRICE</td><td class="src-name">Stooq XAU/USD (synthetic demo)</td><td class="asof mono">2026-06-19<br><span class="meta">3d ago</span></td></tr><tr><td class="src-feed"><span class="src-dot fresh"></span>ETF_HOLD</td><td class="src-name">WGC Goldhub (synthetic demo)</td><td class="asof mono">2026-06-01<br><span class="meta">21d ago</span></td></tr><tr><td class="src-feed"><span class="src-dot fresh"></span>CB_BID</td><td class="src-name">Manual journal (synthetic demo)</td><td class="asof mono">2026-04-30<br><span class="meta">53d ago</span></td></tr><tr><td class="src-feed"><span class="src-dot muted"></span>MACRO (gate)</td><td class="src-name">CME FedWatch (synthetic demo)</td><td class="asof mono">2026-06-15<br><span class="meta">7d ago</span></td></tr></tbody></table></div>
   </section>
 
   <footer>

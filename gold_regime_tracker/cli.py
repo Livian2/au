@@ -11,7 +11,7 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime, timezone
 
 from . import store
 from .config import load_config
@@ -23,6 +23,10 @@ from .seed import seed_baseline
 
 def _today(args) -> date:
     return date.fromisoformat(args.today) if getattr(args, "today", None) else date.today()
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def cmd_assess(args) -> int:
@@ -50,6 +54,8 @@ def cmd_fetch(args) -> int:
         for r in recs:
             store.save_cot(r)
         src = f"file {args.file}" if args.file else f"year {args.year or 'current'}"
+        store.record_source("cot", "CFTC Disaggregated COT (COMEX gold 088691)",
+                            _now_iso(), detail=f"{'import' if args.file else 'live'}; latest report {recs[-1].report_date}")
         print(f"[fetch cot] stored {len(recs)} COT record(s) from {src}; latest {recs[-1].report_date}.")
     elif args.source == "price":
         from .fetchers import price
@@ -61,6 +67,8 @@ def cmd_fetch(args) -> int:
             return 1
         for b in bars[-260:]:  # keep ~1y of daily bars
             store.save_price(b)
+        label = {"file": "Imported OHLC CSV", "stooq": f"Stooq {args.symbol}"}.get(bars[-1].source, bars[-1].source or "price feed")
+        store.record_source("price", label, _now_iso(), detail=f"latest close {bars[-1].date}")
         print(f"[fetch price] stored {min(len(bars),260)} bar(s); latest {bars[-1].date} close={bars[-1].close}.")
     elif args.source == "macro":
         return _fetch_macro(args)
@@ -81,6 +89,8 @@ def _fetch_etf(args) -> int:
     for r in recs:
         store.save_etf(r)
     last = recs[-1]
+    store.record_source("etf", "WGC Goldhub ETF holdings & flows", _now_iso(),
+                        detail=f"{'import' if args.file else 'live'}; latest month {last.month}")
     print(f"[fetch etf] stored {len(recs)} month(s); latest {last.month}: "
           f"{last.tonnes}t, ytd_flow={last.ytd_flow_usd}.")
     return 0
@@ -129,6 +139,8 @@ def _fetch_macro(args) -> int:
               f"{res['implied_end_rate']}%). CPI/Hormuz preserved from last manual entry."),
     )
     store.save_macro(rec)
+    store.record_source("macro", "CME FedWatch (30-Day Fed Funds futures)", _now_iso(),
+                        detail=f"{'import' if args.file else 'live'}; next FOMC {res['meeting']} ({res['method']})")
     print(f"[fetch macro] {res['meeting']}: hike odds {res['hike_odds_pct']}% "
           f"(implied {res['implied_change_bp']:+}bp). Saved.")
     return 0
@@ -146,6 +158,8 @@ def cmd_add(args) -> int:
             entered_on=date.today().isoformat(),
         )
         store.save_cb(rec)
+        store.record_source("cb", "Manual journal (WGC Gold Demand Trends)", _now_iso(),
+                            detail=f"{args.quarter} entered by {args.by or 'unknown'}")
         print(f"[add cb] saved {args.quarter}: {args.qualitative}")
     elif args.kind == "macro":
         rec = MacroRecord(

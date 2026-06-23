@@ -1,0 +1,10 @@
+{
+  "tradeDate": "21 Jun 2026",
+  "settlements": [
+    {"month": "JUN 26", "open": "-", "high": "-", "low": "-", "last": "-", "change": "-", "settle": "94.6650", "volume": "1,234", "openInterest": "12,345"},
+    {"month": "JUL 26", "open": "94.700", "high": "94.715", "low": "94.690", "last": "94.700", "change": "+0.005", "settle": "94.7000", "volume": "23,456", "openInterest": "98,765"},
+    {"month": "AUG 26", "open": "94.660", "high": "94.670", "low": "94.640", "last": "94.650", "change": "-0.010", "settle": "94.6500", "volume": "18,900", "openInterest": "77,000"},
+    {"month": "SEP 26", "open": "-", "high": "-", "low": "-", "last": "-", "change": "-", "settle": "94.5000", "volume": "5,000", "openInterest": "40,000"},
+    {"month": "Total", "open": "", "high": "", "low": "", "last": "", "change": "", "settle": "-", "volume": "150,000", "openInterest": "1,200,000"}
+  ]
+}

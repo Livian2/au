@@ -105,6 +105,12 @@ Recommendations:
 - `REGIME` → "Eligible for a deliberate review of core sizing — subject to the
   §7 minimum interval." (Suppressed entirely if inside the 90-day cooldown.)
 
+The dashboard also carries a **Data sources & freshness** panel: each row's
+feed, where it last came from, and when it was fetched, with a fresh/stale dot —
+so you can see at a glance whether a verdict is riding on fresh auto-data or a
+stale manual one. Fetchers record this automatically; `seed` marks everything as
+synthetic-demo.
+
 ## Troubleshooting fetches (Cloudflare / restricted networks)
 
 If `fetch cot` / `fetch price` returns **HTTP 403**, the request is being
@@ -237,6 +243,20 @@ restricted sandbox work there. Notes:
   reads — they must survive across ephemeral CI runs.
 
 Both roots can be overridden via `GRT_DATA_DIR` / `GRT_JOURNAL_DIR`.
+
+## Validating the fetchers against real data
+
+The parsers are tested against fixtures that mirror each source's **real
+schema** — CFTC's Disaggregated COT text, a Stooq OHLC CSV, the CME settlements
+JSON (with its `"Total"` row and `"-"` placeholders), and a WGC export that
+carries both regional and total columns (`tests/fixtures/`, exercised by
+`tests/test_fixtures.py`). Run `python -m pytest`.
+
+Live HTTP can't be exercised from a locked-down sandbox, so the true end-to-end
+check is either: (a) let the **GitHub Action** run on its open-internet runner,
+or (b) download each source once in a browser and import it —
+`fetch cot --file …`, `fetch price --file …`, `fetch macro --file cme.json`,
+`fetch etf --file wgc.csv` — which runs the exact same parsers.
 
 ## Configuration (§4, §7.6)
 

@@ -12,6 +12,7 @@ import html
 import json
 import os
 from datetime import date
+from typing import Optional
 
 from . import store
 from .analysis import SwingLevels, TrendChannel, swing_levels, trend_channel
@@ -124,6 +125,53 @@ def _channel_panel(ch: TrendChannel | None, sw: SwingLevels | None) -> str:
     return "".join(out)
 
 
+_FEEDS = [
+    ("MM_NET / MM_SHORT", "cot", ["MM_NET", "MM_SHORT"]),
+    ("PRICE", "price", ["PRICE"]),
+    ("ETF_HOLD", "etf", ["ETF_HOLD"]),
+    ("CB_BID", "cb", ["CB_BID"]),
+    ("MACRO (gate)", "macro", []),
+]
+
+
+def _age_days(fetched_at: str, today: date) -> Optional[int]:
+    try:
+        d = date.fromisoformat((fetched_at or "")[:10])
+        return (today - d).days
+    except ValueError:
+        return None
+
+
+def _sources_panel(sources: dict, states, today: date) -> str:
+    by_id = {s.id: s for s in states}
+    rows = []
+    for label, feed, ids in _FEEDS:
+        meta = (sources or {}).get(feed)
+        # freshness from the mapped voting row(s) when available
+        mapped = [by_id[i] for i in ids if i in by_id]
+        if mapped:
+            stale = any(s.stale for s in mapped)
+            dot = "stale" if stale else "fresh"
+        else:
+            dot = "muted"
+        if not meta:
+            src, fetched, age_txt = "— not yet fetched —", "", ""
+        else:
+            src = meta.get("source", "")
+            fetched = (meta.get("fetched_at") or "")[:10]
+            age = _age_days(meta.get("fetched_at", ""), today)
+            age_txt = f"{age}d ago" if age is not None else ""
+        rows.append(
+            f'<tr><td class="src-feed"><span class="src-dot {dot}"></span>{_esc(label)}</td>'
+            f'<td class="src-name">{_esc(src)}</td>'
+            f'<td class="asof mono">{_esc(fetched)}<br><span class="meta">{_esc(age_txt)}</span></td></tr>'
+        )
+    return (
+        '<table class="src-table"><thead><tr><th>Row</th><th>Source</th>'
+        '<th>Last fetched</th></tr></thead><tbody>' + "".join(rows) + "</tbody></table>"
+    )
+
+
 def render_html(
     cfg: Config,
     assessment: RegimeAssessment,
@@ -134,6 +182,7 @@ def render_html(
     channel: TrendChannel | None,
     swings: SwingLevels | None = None,
     blocked_until=None,
+    sources: dict | None = None,
 ) -> str:
     label = assessment.label.value
     label_cls = _REGIME_CLASS.get(label, "healthy")
@@ -144,6 +193,7 @@ def render_html(
 
     chart_svg = render_price_chart(bars, channel, swings, accent=_ACCENT)
     bounds_panel = _channel_panel(channel, swings)
+    sources_panel = _sources_panel(sources or {}, states, today)
 
     synthetic = bool(bars) and all((getattr(b, "source", "") == "synthetic") for b in bars)
 
@@ -297,6 +347,14 @@ def render_html(
   .chip-k {{ color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }}
   .chip-v {{ font-size:12.5px; color:var(--text); font-weight:550; }}
   .rule, .asof, .meta {{ color:var(--muted); }}
+  .src-table {{ width:100%; }}
+  .src-feed {{ font-weight:600; white-space:nowrap; }}
+  .src-name {{ color:var(--muted); }}
+  .src-dot {{ display:inline-block; width:8px; height:8px; border-radius:50%;
+    margin-right:9px; vertical-align:middle; }}
+  .src-dot.fresh {{ background:var(--healthy); }}
+  .src-dot.stale {{ background:var(--transition); }}
+  .src-dot.muted {{ background:var(--stale); }}
   .badge {{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px;
     font-weight:700; letter-spacing:.04em; }}
   .badge.healthy {{ background:rgba(95,179,122,.16); color:var(--healthy); }}
@@ -378,6 +436,11 @@ def render_html(
     <div class="firing">Firing (TRANSITION/REGIME, counting): <b>{_esc(firing)}</b></div>
   </section>
 
+  <section>
+    <h2>Data sources &amp; freshness</h2>
+    <div class="card">{sources_panel}</div>
+  </section>
+
   <footer>
     {_esc(EVENT_RISK_DISCLAIMER)}<br>
     The trend channel is a log-price least-squares fit ±{(channel.k if channel else 2):g}σ — a
@@ -407,7 +470,9 @@ def build_site(cfg: Config, out_dir: str, today: date, force: bool = False) -> s
     swings = swing_levels(bars, left=int(acfg.get("swing_window", 6)), right=int(acfg.get("swing_window", 6)))
 
     os.makedirs(out_dir, exist_ok=True)
-    page = render_html(cfg, assessment, states, today, cb_stale, bars, channel, swings, blocked_until=blocked)
+    sources = store.load_sources()
+    page = render_html(cfg, assessment, states, today, cb_stale, bars, channel, swings,
+                       blocked_until=blocked, sources=sources)
     index_path = os.path.join(out_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as fh:
         fh.write(page)

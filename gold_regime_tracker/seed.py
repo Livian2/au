@@ -141,4 +141,15 @@ def seed_baseline() -> int:
         )
         count += 1
 
+    # Record source metadata so the dashboard's data-sources panel is populated.
+    # fetched_at is set to each feed's latest observation (deterministic demo).
+    for feed, source, fetched in [
+        ("cot", "CFTC Disaggregated COT (synthetic demo)", "2026-06-16"),
+        ("price", "Stooq XAU/USD (synthetic demo)", "2026-06-19"),
+        ("etf", "WGC Goldhub (synthetic demo)", "2026-06-01"),
+        ("cb", "Manual journal (synthetic demo)", "2026-04-30"),
+        ("macro", "CME FedWatch (synthetic demo)", "2026-06-15"),
+    ]:
+        store.record_source(feed, source, fetched, detail="illustrative baseline")
+
     return count

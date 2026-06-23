@@ -142,3 +142,33 @@ def latest(records: list, key) -> Optional[object]:
     if not records:
         return None
     return sorted(records, key=key)[-1]
+
+
+# --- source metadata (for the dashboard "data sources" panel) -----------------
+#
+# A small tracked record of where each feed last came from and when it was
+# pulled. Keyed by feed (cot/price/etf/macro/cb). Lives in the journal so it
+# persists across CI runs and shows up in version history.
+
+_SOURCES_FILE = "sources.json"
+
+
+def _sources_path() -> str:
+    root = _journal_dir()
+    os.makedirs(root, exist_ok=True)
+    return os.path.join(root, _SOURCES_FILE)
+
+
+def load_sources() -> dict:
+    p = _sources_path()
+    if not os.path.exists(p):
+        return {}
+    with open(p, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def record_source(feed: str, source: str, fetched_at: str, detail: str = "") -> None:
+    data = load_sources()
+    data[feed] = {"source": source, "fetched_at": fetched_at, "detail": detail}
+    with open(_sources_path(), "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, default=str)
